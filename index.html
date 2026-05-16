@@ -316,10 +316,7 @@ const DEFAULT_ACCOUNTS=[
  {id:"ac5",name:"Caixa",owner:"kelvin",color:"#F0A830",tipo:"Conta Poupança"},
 ];
 
-const SAMPLE_TX=[
- {id:"ex1",date:todayStr(),desc:"Supermercado Extra",amount:180,owner:"nos",category:"🍽️ Alimentação > Mercado",method:"PIX",accountId:"ac1",cardId:null,notes:"",installments:null,fixed:false,txType:"saida"},
- {id:"ex2",date:todayStr(),desc:"Gasolina Shell",amount:220,owner:"kelvin",category:"🚗 Carro > Gasolina",method:"Crédito",accountId:null,cardId:"cc1",notes:"",installments:null,fixed:false,txType:"saida"},
-];
+const SAMPLE_TX=[];
 
 // ── STATE ────────────────────────────────────────────────────
 let S={
@@ -487,108 +484,187 @@ function renderPage(){
 // ── HOME ─────────────────────────────────────────────────────
 function renderHome(){
  const mt=mTx();
- // Split transactions
- const nonCreditSaidas=mt.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito");
+ const mk=monthKey(S.filterYear,S.filterMonth);
+
+ // ── Classify transactions ──────────────────────────────────
  const entradas=mt.filter(t=>t.txType==="entrada");
+ const saidasDiretas=mt.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito");
  const invPay=Object.values(S.billedInvoices).filter(inv=>inv.confirmed&&inv.payMonth===S.filterMonth&&inv.payYear===S.filterYear);
  const creditItems=mt.filter(t=>t.method==="Crédito"&&(!t.txType||t.txType==="saida"));
- // Confirmed invoice totals (for cash flow)
- const invTotal=invPay.reduce((a,b)=>a+b.total,0);
- // Contas fixas this month
- const mk=monthKey(S.filterYear,S.filterMonth);
- const fixasLançadas=S.fixedAccounts.map(fa=>{const v=S.fixedLogs[fa.id]?.[mk];return v||0;}).reduce((a,b)=>a+b,0);
- const fixasPendentes=S.fixedAccounts.filter(fa=>!S.fixedLogs[fa.id]?.[mk]&&fa.fixed).reduce((a,b)=>a+(b.valor||0),0);
- // Other saidas (non-credit, non-fixed)
+
+ // ── Totals ─────────────────────────────────────────────────
  const totalEntradas=entradas.reduce((a,b)=>a+b.amount,0);
- const outrasDesps=nonCreditSaidas.reduce((a,b)=>a+b.amount,0);
- const totalSaidas=outrasDesps+invTotal;
- // Saldo
+ const totalInvoices=invPay.reduce((a,b)=>a+b.total,0);
+ const totalDiretas=saidasDiretas.reduce((a,b)=>a+b.amount,0);
+ const totalSaidas=totalInvoices+totalDiretas;
+ const resultado=totalEntradas-totalSaidas;
+
+ // ── Saldo ──────────────────────────────────────────────────
  const totalBal=Object.values(S.balances).reduce((s,b)=>s+(b.value||0),0);
  const saldoInicial=S.monthStartBalance?.[mk]||totalBal;
- const saldoFinal=saldoInicial+totalEntradas-totalSaidas;
- // Pending invoices alert
- const pendInvCount=S.cards.reduce((count,c)=>{
-  const key=invoiceKey(c.id,S.filterYear,S.filterMonth);
-  const hasTx=mt.some(t=>t.method==="Crédito"&&t.cardId===c.id);
-  return hasTx&&!S.billedInvoices[key]?count+1:count;
- },0);
- // Ajustes pendentes
- const ajustes=entradas.filter(t=>(t.incomeType||"").includes("Ajuste"));
- // Owner breakdown (saidas only, non-credit)
- const ownerBreak=OWNERS.map(o=>{
-  const v=nonCreditSaidas.filter(t=>t.owner===o.id).reduce((a,b)=>a+b.amount,0);
-  const vi=invPay.filter(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);return c&&c.owner===o.id;}).reduce((a,b)=>a+b.total,0);
-  return{...o,total:v+vi};
- }).filter(o=>o.total>0);
- // Alerts
+ const saldoFinal=saldoInicial+resultado;
+
+ // ── Contas fixas lançadas ──────────────────────────────────
+ const fixasRows=S.fixedAccounts.map(fa=>{
+  const v=S.fixedLogs[fa.id]?.[mk]||0;
+  return v?{desc:fa.desc,v}:null;
+ }).filter(Boolean);
+ const totalFixas=fixasRows.reduce((a,b)=>a+b.v,0);
+ const outrasSaidas=saidasDiretas.filter(t=>{
+  const fa=S.fixedAccounts.find(f=>t.desc&&t.desc.includes(f.desc));return !fa;
+ }).reduce((a,b)=>a+b.amount,0);
+
+ // ── Entradas por tipo ──────────────────────────────────────
+ const entradasByType={};
+ entradas.forEach(t=>{const k=t.incomeType||"Outros";entradasByType[k]=(entradasByType[k]||0)+t.amount;});
+
+ // ── Cartões ────────────────────────────────────────────────
+ // Confirmed invoices by card
+ const invByCard={};
+ invPay.forEach(inv=>{invByCard[inv.cardId]=(invByCard[inv.cardId]||0)+inv.total;});
+ // Unconfirmed credit totals by card (estimated)
+ const unconfByCard={};
+ creditItems.forEach(t=>{
+  if(t.cardId){const key=invoiceKey(t.cardId,S.filterYear,S.filterMonth);
+   if(!S.billedInvoices[key])unconfByCard[t.cardId]=(unconfByCard[t.cardId]||0)+t.amount;}
+ });
+ const pendInvCount=Object.keys(unconfByCard).length;
+
+ // ── Alerts ─────────────────────────────────────────────────
  const alerts=[];
- if(pendInvCount>0) alerts.push(`<div class="reminder"><div class="row"><span style="font-size:12px;font-weight:700;color:var(--gold)">⚠️ ${pendInvCount} fatura(s) aguardando confirmação</span><button onclick="nav('faturas')" style="background:var(--gold);border:none;border-radius:7px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:700;color:#060D08">Ver faturas</button></div></div>`);
- if(ajustes.length>0) alerts.push(`<div class="reminder"><span style="font-size:12px;font-weight:700;color:var(--gold)">⚠️ ${ajustes.length} ajuste(s) gerencial(is) não classificado(s)</span></div>`);
- if(fixasPendentes>0) alerts.push(`<div class="reminder"><div class="row"><span style="font-size:12px;font-weight:700;color:var(--gold)">📌 Fixas pendentes ~${fmtBRL(fixasPendentes)}</span><button onclick="nav('fixas')" style="background:none;border:1px solid var(--goldbd);border-radius:7px;padding:4px 10px;cursor:pointer;font-size:11px;color:var(--gold)">Registrar</button></div></div>`);
- // Goals breached
+ if(pendInvCount>0)alerts.push(`<div class="reminder"><div class="row"><span style="font-size:12px;font-weight:700;color:var(--gold)">⚠️ ${pendInvCount} fatura(s) aguardando confirmação</span><button onclick="nav('faturas')" style="background:var(--gold);border:none;border-radius:7px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:700;color:#060D08;font-family:'Nunito',sans-serif">Ver →</button></div></div>`);
+ if(saldoFinal<0)alerts.push(`<div class="reminder" style="background:var(--redbg);border-color:var(--redbd)"><span style="font-size:12px;font-weight:700;color:var(--red)">🚨 Saldo projetado negativo: ${fmtBRL(saldoFinal)}</span></div>`);
+ const ajustes=entradas.filter(t=>(t.incomeType||"").includes("Ajuste"));
+ if(ajustes.length)alerts.push(`<div class="reminder"><span style="font-size:12px;font-weight:700;color:var(--gold)">⚠️ ${ajustes.length} ajuste(s) gerencial(is) pendente(s) de classificação</span></div>`);
+ const fixasPend=S.fixedAccounts.filter(fa=>!S.fixedLogs[fa.id]?.[mk]&&fa.fixed);
+ if(fixasPend.length)alerts.push(`<div class="reminder"><div class="row"><span style="font-size:12px;font-weight:700;color:var(--gold)">📌 ${fixasPend.length} conta(s) fixa(s) pendente(s)</span><button onclick="nav('fixas')" style="background:none;border:1px solid var(--goldbd);border-radius:7px;padding:4px 10px;cursor:pointer;font-size:11px;color:var(--gold);font-family:'Nunito',sans-serif">Registrar →</button></div></div>`);
+
+ // ── Metas ultrapassadas ────────────────────────────────────
  allGroups().filter(g=>S.goals[g.id]>0).forEach(g=>{
   const spent=mt.filter(t=>getGroup(t.category)?.id===g.id&&(!t.txType||t.txType==="saida")).reduce((a,b)=>a+b.amount,0);
-  if(spent>S.goals[g.id]) alerts.push(`<div class="reminder" style="background:var(--redbg);border-color:var(--redbd)"><span style="font-size:12px;font-weight:700;color:var(--red)">🚨 Meta ${g.l}: ${fmtBRL(spent)} / ${fmtBRL(S.goals[g.id])}</span></div>`);
+  if(spent>S.goals[g.id])alerts.push(`<div class="reminder" style="background:var(--redbg);border-color:var(--redbd)"><span style="font-size:12px;font-weight:700;color:var(--red)">🚨 Meta ${g.l}: ${fmtBRL(spent)} / ${fmtBRL(S.goals[g.id])}</span></div>`);
  });
+
+ // ── Helper: accordion row ──────────────────────────────────
+ let _dreAcc=0;
+ function dreBlock(icon,label,value,colorCls,children,clickable){
+  const id="dre_"+(++_dreAcc);
+  const hasChildren=children&&children.length>0;
+  return`<div>
+   <div class="dre-row${hasChildren?" dre-clickable":""}" onclick="${hasChildren?`dreToggle('${id}')`:""}" style="${hasChildren?"cursor:pointer":""}">
+    <div style="display:flex;align-items:center;gap:7px">
+     ${hasChildren?`<span id="arr_${id}" style="font-size:11px;color:var(--muted);transition:.2s;display:inline-block">▶</span>`:`<span style="width:16px;display:inline-block"></span>`}
+     <span class="dre-lbl main">${icon} ${label}</span>
+    </div>
+    <span class="dre-val ${colorCls}">${fmtBRL(value)}</span>
+   </div>
+   ${hasChildren?`<div id="${id}" style="display:none">${children.map(c=>`
+    <div class="dre-row sub">
+     <div style="display:flex;align-items:center;gap:7px;padding-left:23px">
+      <span class="dre-lbl sub">${escH(c.label)}</span>
+     </div>
+     <span class="dre-val ${colorCls}" style="font-size:12px">${fmtBRL(c.value)}</span>
+    </div>`).join("")}</div>`:""}
+  </div>`;
+ }
+
+ // ── Build DRE rows ─────────────────────────────────────────
+ // Entradas children
+ const entChld=Object.entries(entradasByType).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:k,value:v}));
+
+ // Cartão crédito children (confirmed invoices)
+ const cardChld=[
+  ...Object.entries(invByCard).map(([cid,v])=>{const c=S.cards.find(x=>x.id===cid);return{label:(c?c.name+" "+(OWNERS.find(o=>o.id===c.owner)?.e||""):"Cartão")+" — fatura paga",value:v};}),
+  ...Object.entries(unconfByCard).map(([cid,v])=>{const c=S.cards.find(x=>x.id===cid);return{label:(c?c.name+" "+(OWNERS.find(o=>o.id===c.owner)?.e||""):"Cartão")+" — estimado (não confirmado)",value:v};}),
+ ];
+ const totalCartao=totalInvoices+Object.values(unconfByCard).reduce((a,b)=>a+b,0);
+
+ // Contas fixas children
+ const fixasChld=fixasRows.map(r=>({label:r.desc,value:r.v}));
+
+ // Outras saídas children (by group, non-fixed)
+ const outrasGrp={};
+ saidasDiretas.forEach(t=>{
+  const fa=S.fixedAccounts.find(f=>t.desc&&t.desc.includes(f.desc));
+  if(!fa){const g=getGroup(t.category);const k=g?g.l:"📦 Outros";outrasGrp[k]=(outrasGrp[k]||0)+t.amount;}
+ });
+ const outrasChld=Object.entries(outrasGrp).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:k,value:v}));
+
+ // By owner (saidas)
+ const ownerRows=OWNERS.map(o=>{
+  const vDir=saidasDiretas.filter(t=>t.owner===o.id).reduce((a,b)=>a+b.amount,0);
+  const vInv=invPay.filter(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);return c&&c.owner===o.id;}).reduce((a,b)=>a+b.total,0);
+  return{...o,total:vDir+vInv};
+ }).filter(o=>o.total>0);
 
  return`
  ${alerts.join("")}
- <!-- DRE -->
+
  <div class="dre">
+  <!-- Header saldos -->
   <div class="dre-header">
-   <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">📊 Demonstrativo — ${MONTHS_F[S.filterMonth]} ${S.filterYear}</div>
-   <div style="display:flex;justify-content:space-between;align-items:flex-end">
+   <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px">📊 Demonstrativo de Resultado — ${MONTHS_F[S.filterMonth].toUpperCase()} ${S.filterYear}</div>
+   <div class="g2">
     <div>
-     <div style="font-size:11px;color:var(--muted)">Saldo inicial</div>
-     <div style="font-size:16px;font-weight:800">${fmtBRL(saldoInicial)} <button onclick="openModal('setSaldoInicial')" style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer">✏️</button></div>
+     <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Saldo inicial</div>
+     <div style="font-size:17px;font-weight:800">${fmtBRL(saldoInicial)}</div>
+     <button onclick="openModal('setSaldoInicial')" style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:0;font-family:'Nunito',sans-serif;margin-top:2px">✏️ editar</button>
     </div>
     <div style="text-align:right">
-     <div style="font-size:11px;color:var(--muted)">Saldo final</div>
+     <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Saldo final projetado</div>
      <div style="font-size:22px;font-weight:900;color:${saldoFinal>=0?"var(--mint)":"var(--red)"}">${fmtBRL(saldoFinal)}</div>
-     ${saldoFinal<0?`<div style="font-size:10px;color:var(--red)">⚠️ Saldo negativo</div>`:""}
     </div>
    </div>
   </div>
-  <!-- Entradas -->
-  <div class="dre-row">
-   <span class="dre-lbl main">🟢 Entradas</span>
-   <span class="dre-val pos">${fmtBRL(totalEntradas)}</span>
+
+  <!-- Resultado geral -->
+  <div class="dre-row total" style="border-bottom:1px solid var(--border)">
+   <span class="dre-lbl main" style="font-size:12px">Resultado do mês (Entradas − Saídas)</span>
+   <span class="dre-val big ${resultado>=0?"pos":"neg"}">${resultado>=0?"+":""}${fmtBRL(resultado)}</span>
   </div>
-  ${entradas.length?entradas.reduce((acc,t)=>{const it=acc.find(x=>x.type===(t.incomeType||"Outros"));if(it)it.v+=t.amount;else acc.push({type:t.incomeType||"Outros",v:t.amount});return acc;},[]).map(x=>`<div class="dre-row sub"><span class="dre-lbl sub">↳ ${escH(x.type)}</span><span class="dre-val pos" style="font-size:12px">${fmtBRL(x.v)}</span></div>`).join(""):""}
-  <!-- Saídas -->
-  <div class="dre-row">
-   <span class="dre-lbl main">🔴 Saídas</span>
+
+  <!-- ENTRADAS -->
+  ${dreBlock("🟢","Entradas",totalEntradas,"pos",entChld.length>0?entChld:null)}
+
+  <!-- SAÍDAS header -->
+  <div class="dre-row" style="background:var(--faint)">
+   <span class="dre-lbl main">🔴 Total de Saídas</span>
    <span class="dre-val neg">${fmtBRL(totalSaidas)}</span>
   </div>
-  ${invPay.length?`<div class="dre-row sub"><span class="dre-lbl sub">↳ 💳 Fatura cartão de crédito</span><span class="dre-val neg" style="font-size:12px">${fmtBRL(invTotal)}</span></div>`:""}
-  ${invPay.map(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);return`<div class="dre-row sub" style="padding-left:36px"><span class="dre-lbl sub" style="font-size:10px">↳ ${c?escH(c.name):"Cartão"} (${MONTHS_F[inv.chargeMonth]})</span><span class="dre-val neg" style="font-size:11px">${fmtBRL(inv.total)}</span></div>`;}).join("")}
-  ${fixasLançadas>0?`<div class="dre-row sub"><span class="dre-lbl sub">↳ 📌 Contas fixas</span><span class="dre-val neg" style="font-size:12px">${fmtBRL(fixasLançadas)}</span></div>`:""}
-  ${outrasDesps>0?`<div class="dre-row sub"><span class="dre-lbl sub">↳ 📦 Outras despesas</span><span class="dre-val neg" style="font-size:12px">${fmtBRL(outrasDesps)}</span></div>`:""}
-  <!-- Resultado -->
-  <div class="dre-row total">
-   <span class="dre-lbl main">📊 Resultado do mês</span>
-   <span class="dre-val big ${totalEntradas-totalSaidas>=0?"pos":"neg"}">${fmtBRL(totalEntradas-totalSaidas)}</span>
-  </div>
+
+  <!-- Saídas: Cartão de crédito -->
+  ${totalCartao>0?dreBlock("💳","Cartão de Crédito",totalCartao,"neg",cardChld):""}
+
+  <!-- Saídas: Contas Fixas -->
+  ${totalFixas>0?dreBlock("📌","Contas Fixas",totalFixas,"neg",fixasChld):""}
+
+  <!-- Saídas: Outras despesas -->
+  ${outrasSaidas>0?dreBlock("📦","Outras Despesas",outrasSaidas,"neg",outrasChld):""}
+
+  ${totalEntradas===0&&totalSaidas===0?`<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">Nenhum lançamento em ${MONTHS_F[S.filterMonth]}.<br><button onclick="openModal('add')" style="background:var(--mint);border:none;border-radius:9px;padding:8px 18px;cursor:pointer;font-weight:700;color:#060D08;font-family:'Nunito',sans-serif;margin-top:10px">＋ Primeiro lançamento</button></div>`:""}
  </div>
- <!-- Owner breakdown -->
- ${ownerBreak.length?`<div class="sec">👥 Por responsável</div><div class="g2">${ownerBreak.map(o=>`<div class="card-inset"><div style="font-size:11px;color:${o.c};margin-bottom:3px">${o.e} ${o.l}</div><div style="font-size:16px;font-weight:800;color:var(--red)">${fmtBRL(o.total)}</div></div>`).join("")}</div>`:""}
- <!-- Invoice payments this month -->
- ${invPay.length?`<div class="sec">💳 Pagamentos de fatura</div>${invPay.map(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);const ac=S.accounts.find(x=>x.id===inv.accountId);return`<div class="card-sm row" style="cursor:pointer;border-left:3px solid ${c?.color||"var(--red)"}" onclick="openModal('confirmInvoice','${inv.key}')"><div><div style="font-size:13px;font-weight:700">💳 ${c?escH(c.name):"Cartão"}</div><div style="font-size:11px;color:var(--muted)">Fatura ${MONTHS_F[inv.chargeMonth]} · ${ac?escH(ac.name):""} · ${fmtDate(inv.paidDate)}</div></div><span style="font-size:15px;font-weight:800;color:var(--red)">${fmtBRL(inv.total)}</span></div>`;}).join("")}`:""}
- <!-- Recent -->
- <div class="sec">⚡ Últimos lançamentos</div>
- ${mt.filter(t=>t.method!=="Crédito"||t.txType==="entrada").sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5).map(t=>{
-  const o=OWNERS.find(x=>x.id===t.owner),g=getGroup(t.category),sub=(t.category||"").split(" > ")[1];
-  const isE=t.txType==="entrada";
-  return`<div class="card-sm row" style="cursor:pointer" onclick="editTx('${t.id}')">
-   <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;margin-bottom:2px">${escH(t.desc)}</div>
-   <div style="display:flex;gap:5px;font-size:11px;color:var(--muted)">${fmtDate(t.date)} ${g?`· <span style="color:${g.c}">${escH(sub||"")}</span>`:""} · <span style="color:${o?.c}">${o?.e||""}</span></div></div>
-   <span style="font-size:14px;font-weight:800;color:${isE?"var(--mint)":"var(--red)"}; margin-left:8px;flex-shrink:0">${isE?"+":"−"}${fmtBRL(t.amount)}</span>
-  </div>`;}).join("")}
- ${mt.filter(t=>t.method!=="Crédito"||t.txType==="entrada").length>5?`<button onclick="nav('list')" style="background:none;border:1px solid var(--border);border-radius:10px;padding:9px;width:100%;color:var(--muted);font-family:'Nunito',sans-serif;font-size:12px;cursor:pointer;margin-top:4px">Ver todos os lançamentos →</button>`:""}
+
+ <!-- Por responsável -->
+ ${ownerRows.length?`
+ <div class="sec">👥 Por responsável — saídas</div>
+ <div style="display:flex;flex-direction:column;gap:6px">
+  ${ownerRows.map(o=>{
+   const pct=totalSaidas>0?Math.round((o.total/totalSaidas)*100):0;
+   return`<div class="card-inset">
+    <div class="row" style="margin-bottom:5px">
+     <span style="font-size:13px;font-weight:700;color:${o.c}">${o.e} ${o.l}</span>
+     <div><span style="font-size:15px;font-weight:800;color:var(--red)">${fmtBRL(o.total)}</span><span style="font-size:11px;color:var(--muted);margin-left:5px">${pct}%</span></div>
+    </div>
+    <div class="pbar"><div class="pbar-fill" style="width:${pct}%;background:${o.c}"></div></div>
+   </div>`;
+  }).join("")}
+ </div>`:""}
+
+ <!-- Ver lançamentos -->
+ <button onclick="nav('list')" style="background:none;border:1px solid var(--border);border-radius:11px;padding:11px;width:100%;color:var(--muted);font-family:'Nunito',sans-serif;font-size:13px;font-weight:600;cursor:pointer;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px">📋 Ver todos os lançamentos <span style="color:var(--mint)">→</span></button>
  `;
 }
 
-// ── LIST ─────────────────────────────────────────────────────
 function renderList(){
  const ft=fTx().sort((a,b)=>b.date.localeCompare(a.date));
  const nonCreditFt=ft.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito");
@@ -874,6 +950,14 @@ function nav(id,btn){
 function setTab(id,btn){nav(id,btn);}
 function sbNav(id,btn){nav(id,btn);}
 function mobileNav(id,btn){nav(id,btn);}
+function dreToggle(id){
+ const el=document.getElementById(id);
+ const arr=document.getElementById("arr_"+id);
+ if(!el)return;
+ const open=el.style.display==="none"||el.style.display==="";
+ el.style.display=open?"block":"none";
+ if(arr){arr.style.transform=open?"rotate(90deg)":"rotate(0deg)";}
+}
 function editTx(id){const t=S.transactions.find(x=>x.id===id);if(t)openModal("edit",t)}
 
 // ── TX MODAL ────────────────────────────────────────────────
