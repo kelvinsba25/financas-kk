@@ -492,7 +492,7 @@ function renderHome(){
    ${pendFixed>0?`<div style="margin-top:7px;font-size:11px;color:var(--gold)">📌 Fixas pendentes estimadas: ${fmtBRL(pendFixed)}</div>`:""}
    ${ajustes.length>0?`<div style="margin-top:7px;background:rgba(245,200,66,.1);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--gold)">⚠️ ${ajustes.length} ajuste(s) gerencial(is) pendente(s) de classificação</div>`:""}
   </div>
- </div>\`;
+ </div>`;
  const byWeek={};ft.forEach(t=>{const w=getWeek(t.date);if(!byWeek[w])byWeek[w]=[];byWeek[w].push(t)});
  const oBadges=OWNERS.map(o=>{const v=mt.filter(t=>t.owner===o.id&&(!t.txType||t.txType==="saida")).reduce((a,b)=>a+b.amount,0);return v?`<span style="font-size:11px;background:${o.c}22;color:${o.c};padding:2px 9px;border-radius:20px">${o.e} ${fmtBRL(v)}</span>`:""}).join("");
 
@@ -1069,7 +1069,7 @@ function buildCardDatesModal(cardId){
    <button class="btn btn-ghost" onclick="resetCardDates('${cardId}','${mk}')">↺ Usar padrão</button>
    <button class="btn btn-pri" onclick="saveCardDates('${cardId}','${mk}')">💾 Salvar para este mês</button>
   </div>
- </div></div>\`;
+ </div></div>`;
 }
 function saveCardDates(cardId,mk){
  const cd=+document.getElementById("cdClose")?.value;
@@ -1425,7 +1425,11 @@ function normalizeDate(d){
 }
 
 // ── INIT ─────────────────────────────────────────────────────
-window.addEventListener("DOMContentLoaded",()=>{renderMonthPills();renderOwnerPills();initFB();});
+window.addEventListener("DOMContentLoaded",()=>{
+ renderMonthPills();renderOwnerPills();initFB();
+ // Safety fallback: if Firebase hangs for 6s, render in local mode
+ setTimeout(()=>{if(!S.loaded){S.loaded=true;syncDot("local","modo local");render();}},6000);
+});
 if(document.readyState!=="loading"){renderMonthPills();renderOwnerPills();initFB();}
 </script>
 </body>
