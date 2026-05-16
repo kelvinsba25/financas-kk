@@ -336,6 +336,7 @@ let S={
  customGroups:[],
  monthStartBalance:{},
  cardDateOverrides:{},
+ billedInvoices:{},
  filterMonth:new Date().getMonth(),
  filterYear:new Date().getFullYear(),
  filterOwner:"all",
@@ -356,6 +357,16 @@ function wkLabel(w){const d=new Date(w+"T00:00:00"),e=new Date(d);e.setDate(d.ge
 function escH(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
 function closeModal(){document.getElementById("modalRoot").innerHTML=""}
+// invoiceKey = who owns the charges, payKey = when payment is due
+function invoiceKey(cardId, chargeYear, chargeMonth){
+ return cardId+"__"+chargeYear+"-"+String(chargeMonth+1).padStart(2,"0");
+}
+function getInvoicePayMonth(card, chargeYear, chargeMonth){
+ // returns {year, month} when the invoice is DUE to be paid
+ const fakeDate = new Date(chargeYear, chargeMonth, card.closeDay+1);
+ const billing = setBilling(card, fakeDate.toISOString().slice(0,10));
+ return {year: billing.payDate.getFullYear(), month: billing.payDate.getMonth()};
+}
 function getCardDates(card,ds){
  const d=new Date(ds+"T00:00:00"),mk=monthKey(d.getFullYear(),d.getMonth());
  const ov=S.cardDateOverrides?.[card.id]?.[mk];
@@ -399,6 +410,7 @@ function initFB(){
     if(d.customGroups) S.customGroups=Object.values(d.customGroups);
     if(d.monthStartBalance) S.monthStartBalance=d.monthStartBalance;
     if(d.cardDateOverrides) S.cardDateOverrides=d.cardDateOverrides;
+    if(d.billedInvoices) S.billedInvoices=d.billedInvoices;
    } else {
     DB.ref("kk").set({
      transactions:Object.fromEntries(SAMPLE_TX.map(t=>[t.id,t])),
@@ -421,6 +433,11 @@ function saveCards(c){S.cards=c;fbSet("cards",Object.fromEntries(c.map(x=>[x.id,
 function saveGoals(g){S.goals=g;fbSet("goals",g);render()}
 function saveFixedAccounts(fa){S.fixedAccounts=fa;fbSet("fixedAccounts",Object.fromEntries(fa.map(f=>[f.id,f])));render()}
 function saveFixedLog(faId,key,val){if(!S.fixedLogs[faId])S.fixedLogs[faId]={};S.fixedLogs[faId][key]=val;fbSet(`fixedLogs/${faId}/${key}`,val);}
+function saveBilledInvoice(inv){
+ S.billedInvoices[inv.key]=inv;
+ fbSet("billedInvoices/"+inv.key,inv);
+ render();toast("✓ Fatura confirmada");
+}
 function saveBalance(acId,val,date){S.balances[acId]={value:val,date};fbSet(`balances/${acId}`,{value:val,date});}
 function saveCustomGroup(g){S.customGroups=[...S.customGroups.filter(x=>x.id!==g.id),g];fbSet("customGroups/"+g.id,g);render();}
 
@@ -454,7 +471,15 @@ function renderPage(){
 // ── HOME ─────────────────────────────────────────────────────
 function renderHome(){
  const mt=mTx(),ft=fTx();
- const saidas=mt.filter(t=>(!t.txType||t.txType==="saida")).reduce((a,b)=>a+b.amount,0);
+ // Credit card items don't count as direct outflow — only confirmed invoice payments do
+ const creditCardTxIds=new Set(S.transactions.filter(t=>t.method==="Crédito").map(t=>t.id));
+ const nonCreditSaidas=mt.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito").reduce((a,b)=>a+b.amount,0);
+ // Confirmed invoice payments due THIS month
+ const invoicePayments=Object.values(S.billedInvoices).filter(inv=>
+  inv.confirmed&&inv.payMonth===S.filterMonth&&inv.payYear===S.filterYear
+ );
+ const invoiceTotal=invoicePayments.reduce((a,b)=>a+b.total,0);
+ const saidas=nonCreditSaidas+invoiceTotal;
  const entradas=mt.filter(t=>t.txType==="entrada").reduce((a,b)=>a+b.amount,0);
  const total=saidas;
  const totalBal=Object.values(S.balances).reduce((s,b)=>s+(b.value||0),0);
@@ -489,6 +514,10 @@ function renderHome(){
      ${balancoFinal<0?`<div style="font-size:10px;color:var(--red)">⚠️ Saldo negativo!</div>`:""}
     </div>
    </div>
+   ${invoicePayments.length>0?`<div style="margin-top:7px;background:rgba(240,96,96,.08);border-radius:8px;padding:6px 10px;">
+    <div style="font-size:10px;color:var(--red);margin-bottom:3px;font-weight:700">💳 Pagamentos de fatura neste mês</div>
+    ${invoicePayments.map(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);const ac=S.accounts.find(x=>x.id===inv.accountId);return`<div class="row" style="padding:3px 0"><span style="font-size:11px">${c?escH(c.name):"Cartão"} <span style="color:var(--muted);font-size:10px">(${MONTHS_F[inv.chargeMonth]})</span></span><span style="font-size:11px;font-weight:700;color:var(--red)">${fmtBRL(inv.total)}</span></div>`;}).join("")}
+   </div>`:""}
    ${pendFixed>0?`<div style="margin-top:7px;font-size:11px;color:var(--gold)">📌 Fixas pendentes estimadas: ${fmtBRL(pendFixed)}</div>`:""}
    ${ajustes.length>0?`<div style="margin-top:7px;background:rgba(245,200,66,.1);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--gold)">⚠️ ${ajustes.length} ajuste(s) gerencial(is) pendente(s) de classificação</div>`:""}
   </div>
@@ -572,12 +601,42 @@ function renderHome(){
 // ── LIST ─────────────────────────────────────────────────────
 function renderList(){
  const ft=fTx().sort((a,b)=>b.date.localeCompare(a.date));
- const totalSaidas=ft.filter(t=>!t.txType||t.txType==="saida").reduce((a,b)=>a+b.amount,0);
+ const nonCreditFt=ft.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito");
+ const creditFt=ft.filter(t=>t.method==="Crédito");
+ const invPay=Object.values(S.billedInvoices).filter(inv=>inv.confirmed&&inv.payMonth===S.filterMonth&&inv.payYear===S.filterYear);
+ const totalSaidas=nonCreditFt.reduce((a,b)=>a+b.amount,0)+invPay.reduce((a,b)=>a+b.total,0);
  const totalEntradas=ft.filter(t=>t.txType==="entrada").reduce((a,b)=>a+b.amount,0);
  const total=totalSaidas;
  if(!ft.length)return`<p style="font-size:11px;color:var(--muted);margin-bottom:10px">0 lançamentos — toque ➕ para adicionar</p><div class="empty"><div class="empty-ico">📭</div></div>`;
+ // Build invoice payment rows
+ const invPayRows=invPay.map(inv=>{
+  const c=S.cards.find(x=>x.id===inv.cardId);
+  const ac=S.accounts.find(x=>x.id===inv.accountId);
+  const itemCount=S.transactions.filter(t=>t.method==="Crédito"&&t.cardId===inv.cardId&&(()=>{const d=new Date(t.date+"T00:00:00");return d.getMonth()===inv.chargeMonth&&d.getFullYear()===inv.chargeYear;})()).length;
+  return`<div class="card-sm" style="border-left:3px solid ${c?.color||"var(--red)"};cursor:pointer" onclick="openModal('confirmInvoice','${inv.key}')">
+   <div class="row">
+    <div style="flex:1">
+     <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:700">💳 Pgto ${c?escH(c.name):"Fatura"}</span>
+      <span style="font-size:10px;background:rgba(240,96,96,.15);color:var(--red);padding:1px 7px;border-radius:20px">Fatura ${MONTHS_F[inv.chargeMonth]}</span>
+     </div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted)">${fmtDate(inv.paidDate)}</span>
+      <span style="font-size:11px;color:var(--muted)">• ${itemCount} itens • ${ac?escH(ac.name):""}</span>
+     </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:7px">
+     <span style="font-size:15px;font-weight:800;color:var(--red)">${fmtBRL(inv.total)}</span>
+     <span style="color:var(--muted)">›</span>
+    </div>
+   </div>
+  </div>`;
+ }).join("");
+ // Non-credit regular transactions (credit items shown inside invoice)
+ const regularRows=ft.filter(t=>t.method!=="Crédito"||t.txType==="entrada").sort((a,b)=>b.date.localeCompare(a.date));
  return`<p style="font-size:11px;color:var(--muted);margin-bottom:10px">${ft.length} lançamentos · <span style="color:var(--red)">↓${fmtBRL(totalSaidas)}</span> <span style="color:var(--accent)">↑${fmtBRL(totalEntradas)}</span> — toque para editar</p>`+
- ft.map(t=>{
+ invPayRows+
+ regularRows.map(t=>{
   const o=OWNERS.find(x=>x.id===t.owner),g=getGroup(t.category),sub=(t.category||"").split(" > ")[1];
   const card=t.cardId?S.cards.find(c=>c.id===t.cardId):null;
   const acc=t.accountId?S.accounts.find(a=>a.id===t.accountId):null;
@@ -707,7 +766,50 @@ function renderSaldos(){
 // ── BILLS PAGE ───────────────────────────────────────────────
 function renderBillsPage(){
  if(!S.cards.length)return`<div class="empty"><div class="empty-ico">💳</div><p>Nenhum cartão cadastrado</p></div>`;
- return S.cards.map(c=>{
+ // Show pending invoice confirmations at top
+ const pendingInvoices=[];
+ S.cards.forEach(c=>{
+  // Check last 3 months for unconfirmed invoices that have charges
+  for(let i=2;i>=0;i--){
+   let cm=S.filterMonth-i,cy=S.filterYear;
+   if(cm<0){cm+=12;cy--;}
+   const key=invoiceKey(c.id,cy,cm);
+   const hasTx=S.transactions.some(t=>t.method==="Crédito"&&t.cardId===c.id&&(()=>{
+    const d=new Date(t.date+"T00:00:00");
+    return d.getMonth()===cm&&d.getFullYear()===cy;
+   })());
+   if(hasTx&&!S.billedInvoices[key]){
+    const total=S.transactions.filter(t=>t.method==="Crédito"&&t.cardId===c.id&&(()=>{
+     const d=new Date(t.date+"T00:00:00");return d.getMonth()===cm&&d.getFullYear()===cy;
+    })()).reduce((a,b)=>a+b.amount,0);
+    const pay=getInvoicePayMonth(c,cy,cm);
+    pendingInvoices.push({card:c,chargeYear:cy,chargeMonth:cm,key,total,pay});
+   }
+  }
+ });
+ const pendHTML=pendingInvoices.length?`
+  <div style="background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:14px;padding:14px;margin-bottom:14px">
+   <div style="font-size:11px;font-weight:800;color:var(--gold);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">⚠️ Faturas aguardando confirmação</div>
+   ${pendingInvoices.map(p=>`
+    <div style="background:var(--bg3);border-radius:11px;padding:12px 14px;margin-bottom:8px">
+     <div class="row" style="margin-bottom:8px">
+      <div>
+       <div style="font-size:13px;font-weight:700;color:${p.card.color}">${escH(p.card.name)} <span style="font-size:10px;color:var(--muted)">${OWNERS.find(x=>x.id===p.card.owner)?.e||""}</span></div>
+       <div style="font-size:11px;color:var(--muted)">Gastos de ${MONTHS_F[p.chargeMonth]}/${p.chargeYear} · Vence em ${MONTHS_F[p.pay.month]}/${p.pay.year}</div>
+      </div>
+      <div style="text-align:right">
+       <div style="font-size:18px;font-weight:900;color:var(--red)">${fmtBRL(p.total)}</div>
+       <div style="font-size:10px;color:var(--muted)">${S.transactions.filter(t=>t.method==="Crédito"&&t.cardId===p.card.id&&(()=>{const d=new Date(t.date+"T00:00:00");return d.getMonth()===p.chargeMonth&&d.getFullYear()===p.chargeYear;})()).length} lançamentos</div>
+      </div>
+     </div>
+     <div style="display:flex;gap:7px">
+      <button onclick="openModal('editCardDates','${p.card.id}')" style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-size:11px;padding:8px;cursor:pointer;font-family:var(--bfont)">✏️ Ajustar datas</button>
+      <button onclick="openModal('confirmInvoice','${p.key}')" style="flex:2;background:var(--accent);border:none;border-radius:9px;color:#080F0B;font-size:12px;font-weight:700;padding:8px;cursor:pointer;font-family:var(--bfont)">✅ Confirmar fatura</button>
+     </div>
+    </div>`).join("")}
+  </div>`:""
+ ;
+ return pendHTML+S.cards.map(c=>{
   const today=new Date();
   const cp=setBilling(c,todayStr()),cpKey=pKey(cp.start,cp.end);
   const cardTx=S.transactions.filter(t=>t.method==="Crédito"&&t.cardId===c.id);
@@ -804,6 +906,7 @@ function openModal(type,data){
  else if(type==="editBalance")html=buildEditBalanceModal(data);
  else if(type==="setSaldoInicial")html=buildSaldoInicialModal();
  else if(type==="editCardDates")html=buildCardDatesModal(data);
+ else if(type==="confirmInvoice")html=buildConfirmInvoiceModal(data);
  else if(type==="importExcel")html=buildImportExcelModal();
  root.innerHTML=html;
  setTimeout(()=>{const d=document.getElementById("txDate");if(d){d.addEventListener("change",updateBillingInfo);updateBillingInfo();}},50);
@@ -1054,6 +1157,83 @@ function faDelete(i){S.fixedAccounts.splice(i,1);openModal("editFixed");}
 function faAdd(){S.fixedAccounts.push({id:gid(),desc:"Nova conta",resp:"nos",venc:10,valor:0,fixed:true});openModal("editFixed");}
 
 // ── BALANCE MODAL ───────────────────────────────────────────
+function buildConfirmInvoiceModal(invKey){
+ // invKey = cardId__YYYY-MM
+ const [cardId,ym]=invKey.split("__");
+ const [yr,mo]=ym.split("-").map(Number);
+ const chargeYear=yr, chargeMonth=mo-1;
+ const card=S.cards.find(c=>c.id===cardId);if(!card)return"";
+ const txList=S.transactions.filter(t=>t.method==="Crédito"&&t.cardId===cardId&&(()=>{
+  const d=new Date(t.date+"T00:00:00");return d.getMonth()===chargeMonth&&d.getFullYear()===chargeYear;
+ })());
+ const total=txList.reduce((a,b)=>a+b.amount,0);
+ const pay=getInvoicePayMonth(card,chargeYear,chargeMonth);
+ const existing=S.billedInvoices[invKey]||{};
+ const accBtns=S.accounts.map(a=>{const ow=OWNERS.find(x=>x.id===a.owner);return`
+  <button id="cia_${a.id}" onclick="ciAcc('${a.id}')" style="background:${(existing.accountId||_ciAcc)===a.id?a.color+"33":"var(--bg3)"};border:2px solid ${(existing.accountId||_ciAcc)===a.id?a.color:"transparent"};border-radius:11px;padding:9px 13px;cursor:pointer;text-align:left;color:var(--text);width:100%;margin-bottom:5px;font-family:var(--bfont)">
+   <div class="row"><span style="font-size:13px;font-weight:700;color:${(existing.accountId||_ciAcc)===a.id?a.color:"var(--text)"}">${escH(a.name)} <span style="font-size:10px;color:var(--muted)">${ow?.e||""} ${ow?.l||""}</span></span>${(existing.accountId||_ciAcc)===a.id?`<span style="color:${a.color}">✓</span>`:""}</div>
+  </button>`}).join("");
+ _ciAcc=existing.accountId||S.accounts[0]?.id||null;
+ _ciKey=invKey;
+ const topItems=txList.sort((a,b)=>b.amount-a.amount).slice(0,4).map(t=>{
+  const g=getGroup(t.category),sub=(t.category||"").split(" > ")[1];
+  return`<div class="row" style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+   <span style="font-size:11px;color:var(--muted)">${escH(t.desc)} <span style="color:${g?.c||"var(--muted)"};font-size:10px">${escH(sub||"")}</span></span>
+   <span style="font-size:11px;font-weight:700">${fmtBRL(t.amount)}</span>
+  </div>`;}).join("");
+ return`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+  <div class="shdr">
+   <div><div class="stitle">✅ Confirmar fatura</div><div style="font-size:11px;color:var(--muted)">${escH(card.name)} · ${MONTHS_F[chargeMonth]}/${chargeYear}</div></div>
+   <button class="xbtn" onclick="closeModal()">✕</button>
+  </div>
+  <div style="background:linear-gradient(135deg,#1A0A0A,#2A0808);border-radius:13px;padding:14px;margin-bottom:14px;border:1px solid rgba(240,96,96,.2)">
+   <div style="font-size:11px;color:rgba(255,150,150,.7);margin-bottom:3px">💳 Total da fatura</div>
+   <div style="font-size:28px;font-weight:900;color:var(--red);margin-bottom:4px">${fmtBRL(total)}</div>
+   <div style="font-size:11px;color:var(--muted)">${txList.length} lançamentos · Pagamento em <b style="color:var(--gold)">${MONTHS_F[pay.month]}/${pay.year}</b></div>
+  </div>
+  <div style="background:var(--bg3);border-radius:11px;padding:11px 13px;margin-bottom:14px">
+   <div style="font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Top itens</div>
+   ${topItems}
+   ${txList.length>4?`<div style="font-size:10px;color:var(--muted);margin-top:4px">+${txList.length-4} outros itens</div>`:""}
+  </div>
+  <div style="margin-bottom:14px">
+   <label class="label">Valor a pagar (ajuste se necessário)</label>
+   <input class="input" id="ciVal" type="number" step="0.01" value="${existing.total||total.toFixed(2)}" style="font-size:18px">
+  </div>
+  <div style="margin-bottom:14px">
+   <label class="label">Data do pagamento</label>
+   <input class="input" id="ciDate" type="date" value="${existing.paidDate||new Date(pay.year,pay.month,card.payDay).toISOString().slice(0,10)}">
+  </div>
+  <div>
+   <label class="label">Conta de débito</label>
+   ${accBtns}
+  </div>
+  <div class="fbrow" style="margin-top:14px">
+   <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+   <button class="btn btn-pri" onclick="submitConfirmInvoice()">✅ Confirmar pagamento</button>
+  </div>
+ </div></div>`;
+}
+let _ciAcc=null,_ciKey=null;
+function ciAcc(id){
+ _ciAcc=id;
+ S.accounts.forEach(a=>{
+  const b=document.getElementById("cia_"+a.id);
+  if(b){b.style.background=a.id===id?a.color+"33":"var(--bg3)";b.style.borderColor=a.id===id?a.color:"transparent";}
+ });
+}
+function submitConfirmInvoice(){
+ if(!_ciKey||!_ciAcc){toast("⚠️ Selecione a conta");return;}
+ const val=parseFloat(document.getElementById("ciVal")?.value)||0;
+ const dt=document.getElementById("ciDate")?.value||todayStr();
+ const [cardId,ym]=_ciKey.split("__");
+ const [yr,mo]=ym.split("-").map(Number);
+ const inv={key:_ciKey,cardId,chargeYear:yr,chargeMonth:mo-1,
+  total:val,accountId:_ciAcc,paidDate:dt,confirmed:true,
+  payYear:new Date(dt).getFullYear(),payMonth:new Date(dt).getMonth()};
+ saveBilledInvoice(inv);
+ closeModal();
+}
 function buildCardDatesModal(cardId){
  const card=S.cards.find(c=>c.id===cardId);if(!card)return"";
  const mk=monthKey(S.filterYear,S.filterMonth);
@@ -1164,7 +1344,10 @@ function submitGoals(){const g={};allGroups().forEach(x=>{g[x.id]=parseFloat(doc
 
 // ── CLOSING MODAL ───────────────────────────────────────────
 function buildClosingModal(){
- const mt=mTx(),total=mt.reduce((a,b)=>a+b.amount,0);
+ const mt=mTx();
+ const nonCreditMt=mt.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito");
+ const invPayC=Object.values(S.billedInvoices).filter(inv=>inv.confirmed&&inv.payMonth===S.filterMonth&&inv.payYear===S.filterYear);
+ const total=nonCreditMt.reduce((a,b)=>a+b.amount,0)+invPayC.reduce((a,b)=>a+b.total,0);
  const byM=["Crédito","Débito","PIX"].map(m=>`<div><div style="font-size:10px;color:var(--muted)">${m}</div><div style="font-size:13px;font-weight:700;color:${m==="Crédito"?"var(--gold)":m==="PIX"?"var(--cyan)":"var(--green)"}">${fmtBRL(mt.filter(t=>t.method===m).reduce((a,b)=>a+b.amount,0))}</div></div>`).join("");
  const oGrid=OWNERS.map(o=>{const v=mt.filter(t=>t.owner===o.id).reduce((a,b)=>a+b.amount,0);return`<div style="background:${o.c}1A;border-radius:10px;padding:10px;border-left:3px solid ${o.c}"><div style="font-size:11px;color:var(--muted)">${o.e} ${o.l}</div><div style="font-size:15px;font-weight:700;color:${o.c}">${fmtBRL(v)}</div><div style="font-size:10px;color:var(--muted)">${total>0?((v/total)*100).toFixed(1):0}%</div></div>`;}).join("");
  const byGrp=allGroups().map(g=>{
