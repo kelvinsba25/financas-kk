@@ -272,6 +272,7 @@ const OWNERS=[{id:"kelvin",l:"Kelvin",c:"#4B8EF8",e:"👨"},{id:"karol",l:"Karol
 const MONTHS_S=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MONTHS_F=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const METHODS=["PIX","Débito","Crédito","Dinheiro","TED"];
+const INCOME_TYPES=["Salário","Vale Alimentação","Vale Refeição","PIX Recebido","Transferência Recebida","Freelance/Renda Extra","Reembolso","Ajuste Gerencial ⚠️","Outros Entrada"];
 
 const GROUPS=[
  {id:"carro",l:"🚗 Carro",c:"#F0A830",subs:["Gasolina","Etanol","Seguro Auto","IPVA","Licenciamento","Manutenção","Revisão","Pneu","Estacionamento","Pedágio","Multa","Lavagem","Uber/99/Cabify","Outros Carro"]},
@@ -319,8 +320,8 @@ const DEFAULT_ACCOUNTS=[
 ];
 
 const SAMPLE_TX=[
- {id:"ex1",date:todayStr(),desc:"Supermercado Extra",amount:180,owner:"nos",category:"🍽️ Alimentação > Mercado",method:"PIX",accountId:"ac1",cardId:null,notes:"",installments:null,fixed:false},
- {id:"ex2",date:todayStr(),desc:"Gasolina Shell",amount:220,owner:"kelvin",category:"🚗 Carro > Gasolina",method:"Crédito",accountId:null,cardId:"cc1",notes:"",installments:null,fixed:false},
+ {id:"ex1",date:todayStr(),desc:"Supermercado Extra",amount:180,owner:"nos",category:"🍽️ Alimentação > Mercado",method:"PIX",accountId:"ac1",cardId:null,notes:"",installments:null,fixed:false,txType:"saida"},
+ {id:"ex2",date:todayStr(),desc:"Gasolina Shell",amount:220,owner:"kelvin",category:"🚗 Carro > Gasolina",method:"Crédito",accountId:null,cardId:"cc1",notes:"",installments:null,fixed:false,txType:"saida"},
 ];
 
 // ── STATE ────────────────────────────────────────────────────
@@ -333,6 +334,8 @@ let S={
  balances:{},     // {ac_id: {value, date}}
  goals:Object.fromEntries(GROUPS.map(g=>[g.id,0])),
  customGroups:[],
+ monthStartBalance:{},
+ cardDateOverrides:{},
  filterMonth:new Date().getMonth(),
  filterYear:new Date().getFullYear(),
  filterOwner:"all",
@@ -353,13 +356,20 @@ function wkLabel(w){const d=new Date(w+"T00:00:00"),e=new Date(d);e.setDate(d.ge
 function escH(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
 function closeModal(){document.getElementById("modalRoot").innerHTML=""}
+function getCardDates(card,ds){
+ const d=new Date(ds+"T00:00:00"),mk=monthKey(d.getFullYear(),d.getMonth());
+ const ov=S.cardDateOverrides?.[card.id]?.[mk];
+ return{closeDay:ov?.closeDay||card.closeDay,payDay:ov?.payDay||card.payDay};
+}
 function setBilling(card,ds){
- const d=new Date(ds+"T00:00:00"),y=d.getFullYear(),m=d.getMonth(),day=d.getDate(),cd=card.closeDay;
+ const{closeDay:cd}=getCardDates(card,ds);
+ const d=new Date(ds+"T00:00:00"),y=d.getFullYear(),m=d.getMonth(),day=d.getDate();
  let ps,pe;
  if(day<=cd){const pm=m===0?11:m-1,py=m===0?y-1:y;ps=new Date(py,pm,cd+1);pe=new Date(y,m,cd);}
  else{ps=new Date(y,m,cd+1);const nm=m===11?0:m+1,ny=m===11?y+1:y;pe=new Date(ny,nm,cd);}
+ const{payDay:pd}=getCardDates(card,ds);
  const payM=pe.getMonth()===11?0:pe.getMonth()+1,payY=pe.getMonth()===11?pe.getFullYear()+1:pe.getFullYear();
- return{start:ps,end:pe,payDate:new Date(payY,payM,card.payDay)};
+ return{start:ps,end:pe,payDate:new Date(payY,payM,pd)};
 }
 function pKey(s,e){return s.toISOString().slice(0,10)+"__"+e.toISOString().slice(0,10)}
 function monthKey(y,m){return`${y}-${String(m+1).padStart(2,"0")}`}
@@ -387,6 +397,8 @@ function initFB(){
     if(d.fixedLogs) S.fixedLogs=d.fixedLogs;
     if(d.balances) S.balances=d.balances;
     if(d.customGroups) S.customGroups=Object.values(d.customGroups);
+    if(d.monthStartBalance) S.monthStartBalance=d.monthStartBalance;
+    if(d.cardDateOverrides) S.cardDateOverrides=d.cardDateOverrides;
    } else {
     DB.ref("kk").set({
      transactions:Object.fromEntries(SAMPLE_TX.map(t=>[t.id,t])),
@@ -441,9 +453,48 @@ function renderPage(){
 
 // ── HOME ─────────────────────────────────────────────────────
 function renderHome(){
- const mt=mTx(),ft=fTx(),total=mt.reduce((a,b)=>a+b.amount,0);
+ const mt=mTx(),ft=fTx();
+ const saidas=mt.filter(t=>(!t.txType||t.txType==="saida")).reduce((a,b)=>a+b.amount,0);
+ const entradas=mt.filter(t=>t.txType==="entrada").reduce((a,b)=>a+b.amount,0);
+ const total=saidas;
+ const totalBal=Object.values(S.balances).reduce((s,b)=>s+(b.value||0),0);
+ const saldoInicial=S.monthStartBalance?.[monthKey(S.filterYear,S.filterMonth)]||totalBal;
+ const balancoFinal=saldoInicial+entradas-saidas;
+ const pendFixed=S.fixedAccounts.filter(fa=>{const log=S.fixedLogs[fa.id]?.[monthKey(S.filterYear,S.filterMonth)];return !log&&fa.fixed;}).reduce((a,b)=>a+(b.valor||0),0);
+ const ajustes=mt.filter(t=>t.txType==="entrada"&&(t.incomeType||"").includes("Ajuste"));
+ const balanceCardHTML=`<div style="background:linear-gradient(135deg,#0A2218,#061510);border:1px solid rgba(78,204,163,.2);border-radius:16px;padding:15px;margin-bottom:10px">
+  <div style="font-size:10px;color:var(--mint);opacity:.7;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">📊 Balanço ${MONTHS_F[S.filterMonth]}</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+   <div style="background:rgba(78,204,163,.08);border-radius:10px;padding:9px 11px">
+    <div style="font-size:10px;color:var(--accent);margin-bottom:2px">🟢 Entradas</div>
+    <div style="font-size:17px;font-weight:800;color:var(--accent)">${fmtBRL(entradas)}</div>
+   </div>
+   <div style="background:rgba(240,96,96,.08);border-radius:10px;padding:9px 11px">
+    <div style="font-size:10px;color:var(--red);margin-bottom:2px">🔴 Saídas</div>
+    <div style="font-size:17px;font-weight:800;color:var(--red)">${fmtBRL(saidas)}</div>
+   </div>
+  </div>
+  <div style="border-top:1px solid rgba(78,204,163,.15);padding-top:10px">
+   <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+     <div style="font-size:10px;color:var(--muted)">Saldo inicial do mês</div>
+     <div style="font-size:13px;font-weight:700;color:var(--text)">
+      ${fmtBRL(saldoInicial)}
+      <button onclick="openModal('setSaldoInicial')" style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;margin-left:4px">✏️</button>
+     </div>
+    </div>
+    <div style="text-align:right">
+     <div style="font-size:10px;color:var(--muted)">Saldo projetado</div>
+     <div style="font-size:20px;font-weight:900;color:${balancoFinal>=0?"var(--accent)":"var(--red)"}">${fmtBRL(balancoFinal)}</div>
+     ${balancoFinal<0?`<div style="font-size:10px;color:var(--red)">⚠️ Saldo negativo!</div>`:""}
+    </div>
+   </div>
+   ${pendFixed>0?`<div style="margin-top:7px;font-size:11px;color:var(--gold)">📌 Fixas pendentes estimadas: ${fmtBRL(pendFixed)}</div>`:""}
+   ${ajustes.length>0?`<div style="margin-top:7px;background:rgba(245,200,66,.1);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--gold)">⚠️ ${ajustes.length} ajuste(s) gerencial(is) pendente(s) de classificação</div>`:""}
+  </div>
+ </div>\`;
  const byWeek={};ft.forEach(t=>{const w=getWeek(t.date);if(!byWeek[w])byWeek[w]=[];byWeek[w].push(t)});
- const oBadges=OWNERS.map(o=>{const v=mt.filter(t=>t.owner===o.id).reduce((a,b)=>a+b.amount,0);return v?`<span style="font-size:11px;background:${o.c}22;color:${o.c};padding:2px 9px;border-radius:20px">${o.e} ${fmtBRL(v)}</span>`:""}).join("");
+ const oBadges=OWNERS.map(o=>{const v=mt.filter(t=>t.owner===o.id&&(!t.txType||t.txType==="saida")).reduce((a,b)=>a+b.amount,0);return v?`<span style="font-size:11px;background:${o.c}22;color:${o.c};padding:2px 9px;border-radius:20px">${o.e} ${fmtBRL(v)}</span>`:""}).join("");
 
  // Reminders — fixed accounts with no log this month
  const mk=monthKey(S.filterYear,S.filterMonth);
@@ -511,6 +562,7 @@ function renderHome(){
    <div style="font-size:30px;font-weight:900;font-family:var(--hfont);color:var(--white);margin-bottom:8px">${fmtBRL(total)}</div>
    <div style="display:flex;gap:5px;flex-wrap:wrap">${oBadges}</div>
   </div>
+  ${balanceCardHTML}
   ${reminderHTML}
   ${S.cards.length?`<div class="sec-title">💳 Faturas abertas</div><div style="display:flex;gap:9px;overflow-x:auto;scrollbar-width:none;margin-bottom:2px;padding-bottom:4px">${cardBoxes}</div>`:""}
   ${goalsHTML?`<div class="sec-title">🎯 Metas do mês</div>${goalsHTML}`:""}
@@ -520,21 +572,26 @@ function renderHome(){
 // ── LIST ─────────────────────────────────────────────────────
 function renderList(){
  const ft=fTx().sort((a,b)=>b.date.localeCompare(a.date));
- const total=ft.reduce((a,b)=>a+b.amount,0);
+ const totalSaidas=ft.filter(t=>!t.txType||t.txType==="saida").reduce((a,b)=>a+b.amount,0);
+ const totalEntradas=ft.filter(t=>t.txType==="entrada").reduce((a,b)=>a+b.amount,0);
+ const total=totalSaidas;
  if(!ft.length)return`<p style="font-size:11px;color:var(--muted);margin-bottom:10px">0 lançamentos — toque ➕ para adicionar</p><div class="empty"><div class="empty-ico">📭</div></div>`;
- return`<p style="font-size:11px;color:var(--muted);margin-bottom:10px">${ft.length} lançamentos · ${fmtBRL(total)} — toque para editar</p>`+
+ return`<p style="font-size:11px;color:var(--muted);margin-bottom:10px">${ft.length} lançamentos · <span style="color:var(--red)">↓${fmtBRL(totalSaidas)}</span> <span style="color:var(--accent)">↑${fmtBRL(totalEntradas)}</span> — toque para editar</p>`+
  ft.map(t=>{
   const o=OWNERS.find(x=>x.id===t.owner),g=getGroup(t.category),sub=(t.category||"").split(" > ")[1];
   const card=t.cardId?S.cards.find(c=>c.id===t.cardId):null;
   const acc=t.accountId?S.accounts.find(a=>a.id===t.accountId):null;
   const ib=t.installments?`<span class="badge install-badge">${t.installments.current}/${t.installments.total}x</span>`:"";
   const fb=t.fixed?`<span class="badge fixed-badge">Fixo</span>`:"";
-  return`<div class="card-sm" style="cursor:pointer;border-left:3px solid ${g?.c||"var(--border)"}" onclick="editTx('${t.id}')">
+  const isEntrada=t.txType==="entrada";
+  const isAjuste=isEntrada&&(t.incomeType||"").includes("Ajuste");
+  const etBadge=isEntrada?`<span class="badge" style="background:${isAjuste?"rgba(245,200,66,.15)":"rgba(78,204,163,.15)"};color:${isAjuste?"var(--gold)":"var(--accent)"};border:1px solid ${isAjuste?"rgba(245,200,66,.3)":"rgba(78,204,163,.3)"}">${isAjuste?"⚠️ Ajuste":"🟢 "+escH(t.incomeType||"Entrada")}</span>`:"";
+  return`<div class="card-sm" style="cursor:pointer;border-left:3px solid ${isEntrada?isAjuste?"var(--gold)":"var(--accent)":g?.c||"var(--border)"}" onclick="editTx('${t.id}')">
    <div class="row"><div style="flex:1;min-width:0">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">
      <span style="font-size:13px;font-weight:600">${escH(t.desc)}</span>
      <span style="font-size:10px;background:${o?.c}22;color:${o?.c};padding:1px 7px;border-radius:20px">${o?.e} ${o?.l}</span>
-     ${ib}${fb}
+     ${ib}${fb}${etBadge}
     </div>
     <div style="display:flex;gap:5px;flex-wrap:wrap">
      <span style="font-size:11px;color:var(--muted)">${fmtDate(t.date)}</span>
@@ -543,7 +600,7 @@ function renderList(){
     </div>
    </div>
    <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:7px">
-    <span style="font-size:15px;font-weight:800;color:var(--red)">${fmtBRL(t.amount)}</span>
+    <span style="font-size:15px;font-weight:800;color:${isEntrada?"var(--accent)":"var(--red)"}">${isEntrada?"+":"-"}${fmtBRL(t.amount)}</span>
     <span style="color:var(--muted)">›</span>
    </div></div>
   </div>`;}).join("");
@@ -553,7 +610,7 @@ function renderList(){
 function renderGroups(){
  const ft=fTx();
  const html=allGroups().map(g=>{
-  const items=ft.filter(t=>getGroup(t.category)?.id===g.id);
+  const items=ft.filter(t=>getGroup(t.category)?.id===g.id&&(!t.txType||t.txType==="saida"));
   const spent=items.reduce((a,b)=>a+b.amount,0);if(!spent)return"";
   const goal=S.goals[g.id]||0;
   const bySub={};items.forEach(t=>{const s=(t.category||"").split(" > ")[1];bySub[s]=(bySub[s]||0)+t.amount});
@@ -745,6 +802,8 @@ function openModal(type,data){
  else if(type==="editFixed")html=buildEditFixedModal();
  else if(type==="newGroup")html=buildNewGroupModal();
  else if(type==="editBalance")html=buildEditBalanceModal(data);
+ else if(type==="setSaldoInicial")html=buildSaldoInicialModal();
+ else if(type==="editCardDates")html=buildCardDatesModal(data);
  else if(type==="importExcel")html=buildImportExcelModal();
  root.innerHTML=html;
  setTimeout(()=>{const d=document.getElementById("txDate");if(d){d.addEventListener("change",updateBillingInfo);updateBillingInfo();}},50);
@@ -767,7 +826,23 @@ function buildTxModal(tx){
  return`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
   <div class="shdr"><div class="stitle">${isE?"✏️ Editar":"➕ Novo"} lançamento</div><button class="xbtn" onclick="closeModal()">✕</button></div>
   <div style="display:flex;flex-direction:column;gap:13px">
-   <div><label class="label">Responsável</label><div class="chip-row">${oChips}</div></div>
+   <div>
+   <label class="label">💱 Tipo de lançamento</label>
+   <div style="display:flex;gap:0;background:var(--bg);border-radius:10px;padding:3px;border:1px solid var(--border)">
+    <button id="ttSaida" onclick="setTxType('saida')" style="flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-family:var(--bfont);font-size:13px;font-weight:700;transition:all .2s;background:${(f.txType||'saida')==='saida'?'var(--red)':'transparent'};color:${(f.txType||'saida')==='saida'?'#fff':'var(--muted)'}">🔴 Saída</button>
+    <button id="ttEntrada" onclick="setTxType('entrada')" style="flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-family:var(--bfont);font-size:13px;font-weight:700;transition:all .2s;background:${(f.txType||'saida')==='entrada'?'var(--accent)':'transparent'};color:${(f.txType||'saida')==='entrada'?'#080F0B':'var(--muted)'}">🟢 Entrada</button>
+   </div>
+   <input type="hidden" id="txTypeField" value="${f.txType||'saida'}">
+  </div>
+  <div id="incomeTypeWrap" style="display:${(f.txType||'saida')==='entrada'?'block':'none'}">
+   <label class="label">Tipo de entrada</label>
+   <select class="input" id="txIncomeType" onchange="checkAjuste(this.value)">
+    ${INCOME_TYPES.map(t=>`<option value="${escH(t)}" ${f.incomeType===t?"selected":""}>${escH(t)}</option>`).join("")}
+   </select>
+   <div id="ajusteWarn" style="display:${(f.incomeType||'').includes('Ajuste')?'block':'none'};background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.3);border-radius:8px;padding:8px 11px;margin-top:6px;font-size:11px;color:var(--gold)">⚠️ <b>Ajuste Gerencial</b> — lembre-se de classificar corretamente depois!</div>
+
+  </div>
+  <div><label class="label">Responsável</label><div class="chip-row">${oChips}</div></div>
    <div class="grid2">
     <div><label class="label">Data</label><input class="input" id="txDate" type="date" value="${f.date}"></div>
     <div><label class="label">Valor (R$)</label><input class="input" id="txAmt" type="number" step="0.01" inputmode="decimal" placeholder="0,00" value="${f.amount}"></div>
@@ -813,6 +888,21 @@ function buildTxModal(tx){
  </div></div>`;
 }
 
+function setTxType(type){
+ document.getElementById("txTypeField").value=type;
+ const se=document.getElementById("ttSaida"),ee=document.getElementById("ttEntrada");
+ if(se){se.style.background=type==="saida"?"var(--red)":"transparent";se.style.color=type==="saida"?"#fff":"var(--muted)";}
+ if(ee){ee.style.background=type==="entrada"?"var(--accent)":"transparent";ee.style.color=type==="entrada"?"#080F0B":"var(--muted)";}
+ const iw=document.getElementById("incomeTypeWrap");if(iw)iw.style.display=type==="entrada"?"block":"none";
+ // hide card selector for entrada, always use account
+ const pt=document.getElementById("payTarget"),lbl=document.getElementById("ptLabel"),wrap=document.getElementById("ptBtns");
+ if(type==="entrada"){
+  if(lbl)lbl.textContent="Conta de destino";
+  if(wrap){wrap.innerHTML=S.accounts.map(a=>{const ow=OWNERS.find(x=>x.id===a.owner);return`<button id="acc_${a.id}" onclick="txAcc('${a.id}')" style="background:${_tAcc===a.id?a.color+"33":"var(--bg3)"};border:2px solid ${_tAcc===a.id?a.color:"transparent"};border-radius:11px;padding:9px 13px;cursor:pointer;text-align:left;color:var(--text);width:100%;margin-bottom:5px;font-family:var(--bfont)">
+   <div class="row"><div><span style="font-size:13px;font-weight:700;color:${_tAcc===a.id?a.color:"var(--text)"}">${escH(a.name)}</span> <span style="font-size:10px;color:var(--muted)">${ow?.e||""} ${ow?.l||""}</span></div>${_tAcc===a.id?`<span style="color:${a.color}">✓</span>`:""}</div>
+  </button>`}).join("");}
+ }
+}
 function txOwner(id){_tO=id;OWNERS.forEach(o=>{const b=document.getElementById("oc_"+o.id);if(b){b.style.background=o.id===id?o.c:"var(--bg3)";b.style.borderColor=o.id===id?o.c:"transparent";}})}
 function txMethod(m){
  _tM=m;
@@ -839,6 +929,7 @@ function updateBillingInfo(){
   try{const p=setBilling(card,dateEl.value);document.getElementById("bPeriod").textContent=`${fmtDate(p.start)} → ${fmtDate(p.end)}`;document.getElementById("bPay").textContent=`💰 Vence em ${fmtDate(p.payDate)}`;info.style.display="block";}catch{info.style.display="none";}
  } else info.style.display="none";
 }
+function checkAjuste(v){const w=document.getElementById("ajusteWarn");if(w)w.style.display=v.includes("Ajuste")?"block":"none";}
 function toggleInst(){const c=document.getElementById("isInst"),w=document.getElementById("instWrap"),p=document.getElementById("instPrev");if(w)w.style.display=c?.checked?"flex":"none";if(p)p.style.display=c?.checked?"block":"none";}
 function calcInst(){
  const tot=parseFloat(document.getElementById("instTot")?.value)||0;
@@ -886,8 +977,11 @@ function submitTx(eid,eOwner){
  const isInst=document.getElementById("isInst")?.checked;
  let installments=null;
  if(isInst){const tv=parseFloat(document.getElementById("instTot")?.value)||0,tq=parseInt(document.getElementById("instQty")?.value)||0,tc=parseInt(document.getElementById("instCurr")?.value)||1;if(tv>0&&tq>0)installments={totalValue:tv,total:tq,current:tc};}
+ const txTypeVal=document.getElementById("txTypeField")?.value||"saida";
+ const incomeTypeVal=document.getElementById("txIncomeType")?.value||"";
  const tx={id:eid||gid(),date,desc,amount:amt,owner:_tO||eOwner||"kelvin",category:cat,method:_tM,
-  cardId:_tM==="Crédito"?(_tCrd||null):null,accountId:_tM!=="Crédito"?(_tAcc||null):null,notes,installments,fixed};
+  cardId:_tM==="Crédito"?(_tCrd||null):null,accountId:_tAcc||null,notes,installments,fixed,
+  txType:txTypeVal,incomeType:incomeTypeVal};
  saveTx(tx);closeModal();
 }
 function confirmDel(id){const b=document.getElementById("delBtn");if(b?.dataset.c==="1"){deleteTx(id);closeModal();}else{if(b){b.textContent="⚠️ Confirmar?";b.dataset.c="1";setTimeout(()=>{if(b){b.textContent="🗑 Excluir";b.dataset.c="";}},3000);}}}
@@ -960,6 +1054,58 @@ function faDelete(i){S.fixedAccounts.splice(i,1);openModal("editFixed");}
 function faAdd(){S.fixedAccounts.push({id:gid(),desc:"Nova conta",resp:"nos",venc:10,valor:0,fixed:true});openModal("editFixed");}
 
 // ── BALANCE MODAL ───────────────────────────────────────────
+function buildCardDatesModal(cardId){
+ const card=S.cards.find(c=>c.id===cardId);if(!card)return"";
+ const mk=monthKey(S.filterYear,S.filterMonth);
+ const ov=S.cardDateOverrides?.[cardId]?.[mk]||{};
+ return`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+  <div class="shdr"><div class="stitle">✏️ Datas ${escH(card.name)}</div><button class="xbtn" onclick="closeModal()">✕</button></div>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Ajuste para ${MONTHS_F[S.filterMonth]}/${S.filterYear}. O padrão do cartão é fechamento dia <b style="color:var(--text)">${card.closeDay}</b> e vencimento dia <b style="color:var(--text)">${card.payDay}</b>.</p>
+  <div class="grid2" style="margin-bottom:14px">
+   <div><label class="label">Dia fechamento</label><input class="input" id="cdClose" type="number" min="1" max="31" value="${ov.closeDay||card.closeDay}"></div>
+   <div><label class="label">Dia vencimento</label><input class="input" id="cdPay" type="number" min="1" max="31" value="${ov.payDay||card.payDay}"></div>
+  </div>
+  <div class="fbrow">
+   <button class="btn btn-ghost" onclick="resetCardDates('${cardId}','${mk}')">↺ Usar padrão</button>
+   <button class="btn btn-pri" onclick="saveCardDates('${cardId}','${mk}')">💾 Salvar para este mês</button>
+  </div>
+ </div></div>\`;
+}
+function saveCardDates(cardId,mk){
+ const cd=+document.getElementById("cdClose")?.value;
+ const pd=+document.getElementById("cdPay")?.value;
+ if(!S.cardDateOverrides)S.cardDateOverrides={};
+ if(!S.cardDateOverrides[cardId])S.cardDateOverrides[cardId]={};
+ S.cardDateOverrides[cardId][mk]={closeDay:cd,payDay:pd};
+ fbSet("cardDateOverrides",S.cardDateOverrides);
+ closeModal();render();toast("✓ Datas atualizadas para o mês");
+}
+function resetCardDates(cardId,mk){
+ if(S.cardDateOverrides?.[cardId]?.[mk])delete S.cardDateOverrides[cardId][mk];
+ fbSet("cardDateOverrides",S.cardDateOverrides);
+ closeModal();render();toast("✓ Datas resetadas para o padrão");
+}
+function buildSaldoInicialModal(){
+ const mk=monthKey(S.filterYear,S.filterMonth);
+ const curr=S.monthStartBalance?.[mk]||Object.values(S.balances).reduce((s,b)=>s+(b.value||0),0);
+ return`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+  <div class="shdr"><div class="stitle">📊 Saldo inicial de ${MONTHS_F[S.filterMonth]}</div><button class="xbtn" onclick="closeModal()">✕</button></div>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Informe o saldo total em todas as contas no início do mês para calcular o balanço.</p>
+  <label class="label">Saldo inicial (R$)</label>
+  <input class="input" id="siVal" type="number" step="0.01" inputmode="decimal" value="${curr}" style="font-size:18px;margin-bottom:14px">
+  <div class="fbrow">
+   <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+   <button class="btn btn-pri" onclick="saveSaldoInicial('${mk}')">💾 Salvar</button>
+  </div>
+ </div></div>`;
+}
+function saveSaldoInicial(mk){
+ const v=parseFloat(document.getElementById("siVal")?.value||"0");
+ if(!S.monthStartBalance)S.monthStartBalance={};
+ S.monthStartBalance[mk]=v;
+ fbSet("monthStartBalance",S.monthStartBalance);
+ closeModal();render();toast("✓ Saldo inicial salvo");
+}
 function buildEditBalanceModal(acId){
  const ac=S.accounts.find(a=>a.id===acId);if(!ac)return"";
  const bal=S.balances[acId];
@@ -1075,7 +1221,23 @@ function ecForm(isNew){
  document.getElementById("modalRoot").innerHTML=`<div class="overlay"><div class="sheet">
   <div class="shdr"><div class="stitle">${isNew?"➕ Novo cartão":"✏️ Editar cartão"}</div><button class="xbtn" onclick="openModal('cardsMgr')">✕</button></div>
   <div style="display:flex;flex-direction:column;gap:13px">
-   <div><label class="label">Responsável</label><div class="chip-row">${oChips}</div></div>
+   <div>
+   <label class="label">💱 Tipo de lançamento</label>
+   <div style="display:flex;gap:0;background:var(--bg);border-radius:10px;padding:3px;border:1px solid var(--border)">
+    <button id="ttSaida" onclick="setTxType('saida')" style="flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-family:var(--bfont);font-size:13px;font-weight:700;transition:all .2s;background:${(f.txType||'saida')==='saida'?'var(--red)':'transparent'};color:${(f.txType||'saida')==='saida'?'#fff':'var(--muted)'}">🔴 Saída</button>
+    <button id="ttEntrada" onclick="setTxType('entrada')" style="flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;font-family:var(--bfont);font-size:13px;font-weight:700;transition:all .2s;background:${(f.txType||'saida')==='entrada'?'var(--accent)':'transparent'};color:${(f.txType||'saida')==='entrada'?'#080F0B':'var(--muted)'}">🟢 Entrada</button>
+   </div>
+   <input type="hidden" id="txTypeField" value="${f.txType||'saida'}">
+  </div>
+  <div id="incomeTypeWrap" style="display:${(f.txType||'saida')==='entrada'?'block':'none'}">
+   <label class="label">Tipo de entrada</label>
+   <select class="input" id="txIncomeType" onchange="checkAjuste(this.value)">
+    ${INCOME_TYPES.map(t=>`<option value="${escH(t)}" ${f.incomeType===t?"selected":""}>${escH(t)}</option>`).join("")}
+   </select>
+   <div id="ajusteWarn" style="display:${(f.incomeType||'').includes('Ajuste')?'block':'none'};background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.3);border-radius:8px;padding:8px 11px;margin-top:6px;font-size:11px;color:var(--gold)">⚠️ <b>Ajuste Gerencial</b> — lembre-se de classificar corretamente depois!</div>
+
+  </div>
+  <div><label class="label">Responsável</label><div class="chip-row">${oChips}</div></div>
    <div><label class="label">Nome</label><input class="input" id="ecName" value="${escH(c.name)}" placeholder="Ex: Nubank, Porto Seguro..."></div>
    <div><label class="label">Bandeira</label><select class="input" id="ecBrand">${CB.map(b=>`<option ${c.brand===b?"selected":""}>${b}</option>`).join("")}</select></div>
    <div class="grid2">
