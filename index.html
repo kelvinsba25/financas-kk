@@ -2,248 +2,259 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="mobile-web-app-capable" content="yes"/>
-<title>💚 Finanças K&K</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>💚 K&K Finanças</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
+/* ── RESET ── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;font-family:'Nunito',system-ui,sans-serif;overflow:hidden;background:#060D08;color:#E2F0E8;-webkit-font-smoothing:antialiased}
+
+/* ── TOKENS ── */
 :root{
-  --bg:#080F0B;--bg2:#0D1810;--bg3:#111F15;--bg4:#162A1A;--bg5:#1C3322;
-  --border:#1E3526;--text:#E8F5ED;--muted:#6B8F73;--faint:#1C3020;
-  --accent:#4ECCA3;--accent2:#2EBD8A;--mint:#A8FFDB;--white:#F0FAF5;
-  --blue:#4B8EF8;--pink:#F07DB0;--purple:#A87EF8;--green:#4ECCA3;
-  --gold:#F5C842;--red:#F06060;--cyan:#3DDBD8;--orange:#F0883C;
-  --hfont:'Nunito',sans-serif;--bfont:'Plus Jakarta Sans',sans-serif;
-  --radius:14px;--sheet-radius:24px 24px 0 0;
-}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--bfont);overflow:hidden;-webkit-font-smoothing:antialiased}
-#app{height:100dvh;display:flex;flex-direction:column;max-width:520px;margin:0 auto;position:relative;overflow:hidden}
-
-/* Desktop expands */
-@media(min-width:640px){
-  #app{max-width:100%;flex-direction:row}
-  #sidebar{display:flex;flex-direction:column;width:220px;flex-shrink:0;padding:24px 12px;border-right:1px solid var(--border);overflow-y:auto}
-  #main-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-  #bottom-nav{display:none}
-  #desktop-header{display:flex}
-  #mobile-header{display:none}
-  .scroll{padding:0 20px 40px}
-}
-@media(max-width:639px){
-  #sidebar{display:none}
-  #desktop-header{display:none}
-  #mobile-header{display:flex}
+  --bg0:#060D08;    /* deepest bg */
+  --bg1:#0C1610;    /* sidebar / cards */
+  --bg2:#111F15;    /* content bg */
+  --bg3:#172A1B;    /* card surface */
+  --bg4:#1D3422;    /* elevated */
+  --border:#1F3826;
+  --text:#E2F0E8;
+  --muted:#6B9070;
+  --faint:#0F1C12;
+  --mint:#4ECCA3;   /* primary accent */
+  --mint2:#2EBD8A;  /* darker mint */
+  --mintbg:rgba(78,204,163,.10);
+  --mintbd:rgba(78,204,163,.22);
+  --red:#F06B6B;
+  --redbg:rgba(240,107,107,.10);
+  --redbd:rgba(240,107,107,.22);
+  --gold:#F5C842;
+  --goldbg:rgba(245,200,66,.10);
+  --goldbd:rgba(245,200,66,.22);
+  --blue:#5B9CF8;
+  --pink:#F07DB0;
+  --purple:#A87EF8;
+  --r:13px; --r2:18px;
 }
 
-::-webkit-scrollbar{width:3px;height:3px}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* ── LAYOUT ── */
+#app{display:flex;height:100dvh;overflow:hidden}
 
-/* ── SIDEBAR (desktop) ── */
-#sidebar{background:var(--bg2)}
-.sb-logo{font-family:var(--hfont);font-size:20px;font-weight:800;padding:8px 10px 20px;letter-spacing:-0.5px}
-.sb-logo span{color:var(--accent)}
-.sb-nav{display:flex;flex-direction:column;gap:4px;margin-bottom:20px}
-.sb-btn{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:none;background:none;color:var(--muted);font-size:13px;font-family:var(--bfont);cursor:pointer;width:100%;text-align:left;transition:all .15s}
-.sb-btn:hover{background:var(--bg3);color:var(--text)}
-.sb-btn.active{background:var(--bg4);color:var(--accent);font-weight:600}
-.sb-btn .ico{font-size:16px;width:20px;text-align:center}
-.sb-section{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;padding:12px 12px 4px;font-weight:700}
-.sb-divider{height:1px;background:var(--border);margin:10px 0}
-.sb-action{display:flex;flex-direction:column;gap:6px;margin-top:auto}
-.sb-action-btn{padding:9px 12px;border-radius:10px;border:none;cursor:pointer;font-family:var(--bfont);font-size:12px;font-weight:600;text-align:left;transition:all .15s}
+/* SIDEBAR desktop */
+#sidebar{width:210px;flex-shrink:0;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;padding:0 0 16px}
+@media(max-width:639px){#sidebar{display:none}}
+.sb-header{padding:18px 16px 10px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.sb-logo{font-size:19px;font-weight:900;letter-spacing:-.5px}
+.sb-logo em{color:var(--mint);font-style:normal}
+.sb-sync{font-size:10px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:4px}
+.sb-section{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;padding:12px 16px 4px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:9px 14px;border-radius:0;border:none;background:none;color:var(--muted);font-size:13px;font-family:'Nunito',sans-serif;cursor:pointer;width:100%;text-align:left;transition:.15s;font-weight:600}
+.sb-item:hover{background:var(--bg3);color:var(--text)}
+.sb-item.active{background:var(--mintbg);color:var(--mint);border-right:3px solid var(--mint)}
+.sb-item .ico{width:18px;text-align:center;font-size:15px;flex-shrink:0}
+.sb-footer{margin-top:auto;padding:12px 10px 0;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--border)}
+.sb-btn{padding:9px 12px;border-radius:10px;border:none;cursor:pointer;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;text-align:center;transition:.15s;width:100%}
 
-/* ── MOBILE HEADER ── */
-#mobile-header{justify-content:space-between;align-items:center;padding:16px 14px 8px;flex-shrink:0}
-.mh-title{font-family:var(--hfont);font-size:21px;font-weight:800;letter-spacing:-0.5px}
-.mh-sub{font-size:11px;color:var(--muted);margin-bottom:2px}
-.hdr-btns{display:flex;gap:5px}
-.icon-btn{width:34px;height:34px;border:none;border-radius:9px;background:var(--bg3);color:var(--text);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0}
-.icon-btn.pri{background:var(--accent);color:#080F0B;font-size:19px}
-.icon-btn:active{opacity:.7}
+/* MAIN */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;background:var(--bg2)}
 
-/* ── DESKTOP HEADER ── */
-#desktop-header{justify-content:space-between;align-items:center;padding:20px 20px 10px;flex-shrink:0;border-bottom:1px solid var(--border)}
-.dh-left h1{font-family:var(--hfont);font-size:24px;font-weight:800;letter-spacing:-0.5px}
-.dh-left p{font-size:12px;color:var(--muted)}
-.dh-btns{display:flex;gap:8px}
-.dh-btn{padding:8px 16px;border-radius:10px;border:none;cursor:pointer;font-family:var(--bfont);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .15s}
+/* TOP BAR */
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg1);gap:10px}
+.tb-left{display:flex;align-items:center;gap:10px;min-width:0}
+.tb-title{font-size:16px;font-weight:900;letter-spacing:-.3px}
+@media(max-width:639px){.tb-title{font-size:15px}}
+.tb-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.tb-btn{height:34px;padding:0 13px;border-radius:9px;border:none;cursor:pointer;font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;display:flex;align-items:center;gap:5px;transition:.15s;white-space:nowrap}
+.tb-sync{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;white-space:nowrap}
 
-/* ── PILLS ── */
-.pills{display:flex;gap:5px;overflow-x:auto;padding:0 14px 10px;scrollbar-width:none;flex-shrink:0}
-.pills::-webkit-scrollbar{display:none}
-.pill{padding:5px 13px;border-radius:20px;border:2px solid transparent;cursor:pointer;white-space:nowrap;font-size:12px;font-family:var(--bfont);font-weight:500;background:var(--bg3);color:var(--muted);transition:all .15s}
-.pill.active{color:#080F0B;font-weight:700}
+/* MONTH NAV */
+#monthnav{display:flex;align-items:center;gap:0;padding:10px 14px;flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg1);overflow-x:auto;scrollbar-width:none}
+#monthnav::-webkit-scrollbar{display:none}
+.mn-year{display:flex;align-items:center;gap:5px;margin-right:10px;flex-shrink:0}
+.mn-year-btn{width:26px;height:26px;border:none;border-radius:7px;background:var(--bg3);color:var(--muted);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center}
+.mn-year-lbl{font-size:13px;font-weight:800;color:var(--text);min-width:36px;text-align:center}
+.mn-months{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.mn-months::-webkit-scrollbar{display:none}
+.mn-m{padding:5px 12px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:700;background:var(--bg3);color:var(--muted);transition:.15s;white-space:nowrap;font-family:'Nunito',sans-serif}
+.mn-m.active{background:var(--mint);color:#060D08}
+.mn-m:hover:not(.active){background:var(--bg4);color:var(--text)}
 
-/* ── TABS (mobile) ── */
-.tabs{display:flex;padding:0 14px 10px;gap:4px;flex-shrink:0}
-.tab{flex:1;padding:7px 4px;border-radius:9px;border:none;cursor:pointer;font-size:11px;font-family:var(--bfont);font-weight:500;background:var(--bg3);color:var(--muted);transition:all .15s}
-.tab.active{background:var(--bg4);color:var(--accent);font-weight:700;border:1px solid rgba(78,204,163,.3)}
+/* MOBILE TABS */
+#mobtabs{display:none;background:var(--bg1);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+#mobtabs::-webkit-scrollbar{display:none}
+@media(max-width:639px){#mobtabs{display:flex;padding:6px 10px;gap:4px}}
+.mt-tab{padding:6px 13px;border-radius:20px;border:none;cursor:pointer;font-size:11px;font-weight:700;background:none;color:var(--muted);white-space:nowrap;font-family:'Nunito',sans-serif;transition:.15s}
+.mt-tab.active{background:var(--mintbg);color:var(--mint)}
 
-/* ── BOTTOM NAV (mobile) ── */
-#bottom-nav{display:flex;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;padding:6px 0 env(safe-area-inset-bottom)}
-.bn-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border:none;background:none;cursor:pointer;color:var(--muted);font-size:9px;font-family:var(--bfont);transition:all .15s}
-.bn-btn.active{color:var(--accent)}
-.bn-ico{font-size:18px}
+/* SCROLL AREA */
+#content{flex:1;overflow-y:auto;padding:14px 14px 80px}
+@media(min-width:640px){#content{padding:16px 20px 40px}}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
-/* ── SCROLL AREA ── */
-.scroll{flex:1;overflow-y:auto;padding:0 14px 20px}
+/* BOTTOM NAV mobile */
+#botnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg1);border-top:1px solid var(--border);z-index:100;padding:4px 0 env(safe-area-inset-bottom)}
+@media(max-width:639px){#botnav{display:flex}}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:9px;font-family:'Nunito',sans-serif;font-weight:600;transition:.15s}
+.bn-item.active{color:var(--mint)}
+.bn-ico{font-size:19px;line-height:1}
 
-/* ── CARDS ── */
-.card{background:var(--bg2);border-radius:var(--radius);padding:15px;margin-bottom:9px;border:1px solid var(--border)}
-.card-sm{background:var(--bg3);border-radius:11px;padding:11px 13px;margin-bottom:7px;border:1px solid var(--border)}
-.sec-title{font-size:10px;font-weight:800;color:var(--accent2);margin:15px 0 7px;text-transform:uppercase;letter-spacing:1.2px}
-.row{display:flex;justify-content:space-between;align-items:center}
+/* ── CARDS / SURFACES ── */
+.card{background:var(--bg3);border-radius:var(--r2);border:1px solid var(--border);padding:15px;margin-bottom:10px}
+.card-sm{background:var(--bg3);border-radius:var(--r);border:1px solid var(--border);padding:11px 13px;margin-bottom:7px}
+.card-inset{background:var(--bg4);border-radius:10px;padding:10px 12px;margin-bottom:6px}
+.sec{font-size:9px;font-weight:800;color:var(--mint2);text-transform:uppercase;letter-spacing:1.2px;margin:16px 0 7px}
+
+/* ── DRE CARD ── */
+.dre{background:var(--bg3);border-radius:var(--r2);border:1px solid var(--border);overflow:hidden;margin-bottom:10px}
+.dre-header{background:linear-gradient(135deg,#0A2218,#071510);padding:16px 16px 12px;border-bottom:1px solid var(--border)}
+.dre-row{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border)}
+.dre-row:last-child{border-bottom:none}
+.dre-row.sub{padding:6px 24px;background:var(--faint)}
+.dre-row.total{background:var(--bg4);padding:10px 16px}
+.dre-lbl{font-size:12px;color:var(--muted);font-weight:600}
+.dre-lbl.main{font-size:13px;color:var(--text);font-weight:700}
+.dre-lbl.sub{font-size:11px;color:var(--muted)}
+.dre-val{font-size:13px;font-weight:800}
+.dre-val.pos{color:var(--mint)}
+.dre-val.neg{color:var(--red)}
+.dre-val.neu{color:var(--text)}
+.dre-val.big{font-size:20px;font-weight:900}
 
 /* ── FORMS ── */
-.input{background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:9px 11px;font-size:14px;width:100%;font-family:var(--bfont);outline:none;transition:border .15s}
-.input:focus{border-color:rgba(78,204,163,.5);box-shadow:0 0 0 3px rgba(78,204,163,.08)}
-.input option{background:var(--bg2)}
-.label{font-size:10px;color:var(--muted);display:block;margin-bottom:3px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-textarea.input{resize:vertical;min-height:80px}
+.input{background:var(--bg0);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:9px 11px;font-size:14px;width:100%;font-family:'Nunito',sans-serif;outline:none;transition:.15s}
+.input:focus{border-color:var(--mintbd);box-shadow:0 0 0 3px rgba(78,204,163,.08)}
+.input option{background:var(--bg1)}
+.label{font-size:10px;font-weight:800;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+textarea.input{resize:vertical;min-height:70px}
 
 /* ── BUTTONS ── */
-.btn{border:none;border-radius:11px;padding:11px 0;font-size:14px;font-weight:700;cursor:pointer;flex:1;font-family:var(--bfont);transition:opacity .15s}
-.btn:active{opacity:.7}
-.btn-pri{background:var(--accent);color:#080F0B}
-.btn-danger{background:var(--red);color:#fff}
-.btn-ghost{background:var(--bg3);color:var(--muted)}
-.btn-green{background:var(--accent2);color:#fff}
-.btn-gold{background:var(--gold);color:#07090F}
+.btn{border:none;border-radius:10px;padding:11px 0;font-size:14px;font-weight:700;cursor:pointer;flex:1;font-family:'Nunito',sans-serif;transition:.12s}
+.btn:active{opacity:.75}
+.btn-pri{background:var(--mint);color:#060D08}
+.btn-red{background:var(--red);color:#fff}
+.btn-ghost{background:var(--bg4);color:var(--muted);border:1px solid var(--border)}
 .fbrow{display:flex;gap:8px}
 
-/* ── MODAL ── */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:flex-end;justify-content:center;z-index:300;backdrop-filter:blur(4px)}
-.sheet{background:var(--bg2);border-radius:var(--sheet-radius);padding:22px;width:100%;max-width:520px;max-height:92dvh;overflow-y:auto}
-@media(min-width:640px){.overlay{align-items:center}.sheet{max-width:560px;border-radius:18px;max-height:88dvh}}
-.shdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-.stitle{font-family:var(--hfont);font-size:17px;font-weight:800;letter-spacing:-0.3px}
-.xbtn{width:29px;height:29px;border:none;border-radius:7px;background:var(--bg3);color:var(--muted);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
-
 /* ── CHIPS ── */
-.o-chip{padding:6px 13px;border-radius:20px;border:2px solid transparent;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;font-family:var(--bfont);transition:all .15s}
-.chip-row{display:flex;gap:7px;flex-wrap:wrap}
-.m-chip{padding:5px 11px;border-radius:8px;border:1px solid transparent;cursor:pointer;font-size:12px;font-family:var(--bfont);transition:all .15s;background:var(--bg3);color:var(--muted)}
-
-/* ── PROGRESS ── */
-.pbar{height:5px;background:var(--faint);border-radius:3px;overflow:hidden;margin:4px 0}
-.pbar-fill{height:5px;border-radius:3px;transition:width .5s}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:7px 13px;border-radius:20px;border:2px solid transparent;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;font-family:'Nunito',sans-serif;transition:.15s;background:var(--bg4);color:var(--muted)}
 
 /* ── BADGES ── */
-.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
-.install-badge{background:rgba(240,168,48,.15);color:var(--gold);border:1px solid rgba(240,168,48,.3)}
-.fixed-badge{background:rgba(78,204,163,.15);color:var(--accent);border:1px solid rgba(78,204,163,.3)}
-.pending-badge{background:rgba(245,100,80,.15);color:var(--red);border:1px solid rgba(245,100,80,.3)}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.b-mint{background:var(--mintbg);color:var(--mint);border:1px solid var(--mintbd)}
+.b-red{background:var(--redbg);color:var(--red);border:1px solid var(--redbd)}
+.b-gold{background:var(--goldbg);color:var(--gold);border:1px solid var(--goldbd)}
+.b-blue{background:rgba(91,156,248,.1);color:var(--blue);border:1px solid rgba(91,156,248,.25)}
+.b-muted{background:var(--bg4);color:var(--muted);border:1px solid var(--border)}
 
-/* ── SYNC ── */
-#sync-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;transition:background .3s}
-#sync-dot.ok,#sync-dot-sb.ok,#sync-dot-m.ok{background:var(--accent)}
-#sync-dot.syncing{background:var(--gold);animation:blink .8s infinite}
-#sync-dot.err{background:var(--red)}
-#sync-dot.local{background:var(--muted)}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+/* ── PROGRESS ── */
+.pbar{height:5px;background:var(--bg4);border-radius:3px;overflow:hidden;margin:4px 0}
+.pbar-fill{height:5px;border-radius:3px;transition:width .5s}
 
-/* ── TOAST ── */
-#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg5);color:var(--text);padding:9px 18px;border-radius:20px;font-size:13px;opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
-#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-@media(min-width:640px){#toast{bottom:30px}}
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:flex-end;justify-content:center;z-index:300;backdrop-filter:blur(6px)}
+.sheet{background:var(--bg1);border-radius:22px 22px 0 0;padding:20px;width:100%;max-width:520px;max-height:92dvh;overflow-y:auto}
+@media(min-width:640px){.overlay{align-items:center}.sheet{border-radius:18px;max-height:88dvh}}
+.sh-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.sh-title{font-size:17px;font-weight:900;letter-spacing:-.3px}
+.sh-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.xbtn{width:30px;height:30px;border:none;border-radius:8px;background:var(--bg3);color:var(--muted);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 
-/* ── REMINDER CARD ── */
-.reminder-card{background:rgba(78,204,163,.06);border:1px solid rgba(78,204,163,.25);border-radius:11px;padding:11px 13px;margin-bottom:7px}
-
-/* ── EMPTY STATE ── */
+/* ── MISC ── */
+.row{display:flex;justify-content:space-between;align-items:center}
 .empty{text-align:center;color:var(--muted);padding:50px 20px}
-.empty-ico{font-size:48px;margin-bottom:12px}
+.empty-ico{font-size:44px;margin-bottom:10px}
+.reminder{background:var(--goldbg);border:1px solid var(--goldbd);border-radius:11px;padding:10px 12px;margin-bottom:7px}
+#toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--bg4);color:var(--text);padding:8px 18px;border-radius:20px;font-size:12px;opacity:0;transition:.25s;z-index:999;pointer-events:none;border:1px solid var(--border);white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(min-width:640px){#toast{bottom:24px}}
+#sync-dot,#sync-dot-m{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0}
+.sd-ok{background:var(--mint)}
+.sd-syncing{background:var(--gold);animation:blink .7s infinite}
+.sd-err{background:var(--red)}
+.sd-local{background:var(--muted)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 </head>
 <body>
 <div id="app">
-  <!-- SIDEBAR (desktop) -->
+
+  <!-- SIDEBAR -->
   <div id="sidebar">
-    <div class="sb-logo">🌿 K<span>&</span>K</div>
+    <div class="sb-header">
+      <div class="sb-logo">💚 K<em>&</em>K</div>
+      <div class="sb-sync"><span id="sync-dot" class="sd-local"></span><span id="sync-lbl">modo local</span></div>
+    </div>
     <div class="sb-section">Visão Geral</div>
-    <nav class="sb-nav">
-      <button class="sb-btn active" onclick="sbNav('home',this)"><span class="ico">📊</span>Resumo</button>
-      <button class="sb-btn" onclick="sbNav('list',this)"><span class="ico">📋</span>Lançamentos</button>
-      <button class="sb-btn" onclick="sbNav('groups',this)"><span class="ico">🗂️</span>Grupos</button>
-      <button class="sb-btn" onclick="sbNav('fixed',this)"><span class="ico">📌</span>Contas Fixas</button>
-      <button class="sb-btn" onclick="sbNav('saldos',this)"><span class="ico">💰</span>Saldos & Patrimônio</button>
-    </nav>
-    <div class="sb-section">Cartões</div>
-    <nav class="sb-nav">
-      <button class="sb-btn" onclick="sbNav('bills',this)"><span class="ico">📋</span>Faturas</button>
-      <button class="sb-btn" onclick="openModal('cardsMgr')"><span class="ico">💳</span>Gerenciar Cartões</button>
-    </nav>
-    <div class="sb-section">Ferramentas</div>
-    <nav class="sb-nav">
-      <button class="sb-btn" onclick="openModal('closing')"><span class="ico">📅</span>Fechamento</button>
-      <button class="sb-btn" onclick="openModal('goals')"><span class="ico">🎯</span>Metas</button>
-      <button class="sb-btn" onclick="openModal('ai')"><span class="ico">✨</span>Importar com IA</button>
-    </nav>
-    <div class="sb-divider"></div>
-    <div class="sb-action">
-      <button class="sb-action-btn" style="background:var(--accent);color:#080F0B;font-weight:700" onclick="exportExcel()">⬇️ Exportar Excel</button>
-      <button class="sb-action-btn" style="background:var(--bg4);color:var(--text)" onclick="openModal('importExcel')">⬆️ Importar Excel</button>
-      <div style="font-size:10px;color:var(--muted);padding:8px 0 0;text-align:center"><span id="sync-dot-sb" class="local" style="width:6px;height:6px;border-radius:50%;display:inline-block;background:var(--muted);margin-right:4px"></span><span id="sync-lbl-sb">modo local</span></div>
+    <button class="sb-item active" onclick="nav('home',this)"><span class="ico">📊</span>DRE / Resumo</button>
+    <button class="sb-item" onclick="nav('gastos',this)"><span class="ico">📈</span>Gastos por Grupo</button>
+    <button class="sb-item" onclick="nav('list',this)"><span class="ico">📋</span>Lançamentos</button>
+    <div class="sb-section">Cartões & Contas</div>
+    <button class="sb-item" onclick="nav('faturas',this)"><span class="ico">💳</span>Faturas</button>
+    <button class="sb-item" onclick="nav('saldos',this)"><span class="ico">🏦</span>Saldos & Contas</button>
+    <div class="sb-section">Configurações</div>
+    <button class="sb-item" onclick="nav('fixas',this)"><span class="ico">📌</span>Contas Fixas</button>
+    <button class="sb-item" onclick="openModal('metas')"><span class="ico">🎯</span>Metas</button>
+    <button class="sb-item" onclick="openModal('cardsMgr')"><span class="ico">⚙️</span>Cartões & Contas</button>
+    <button class="sb-item" onclick="openModal('ai')"><span class="ico">✨</span>Importar com IA</button>
+    <div class="sb-footer">
+      <button class="sb-btn" style="background:var(--mint);color:#060D08" onclick="exportExcel()">⬇️ Exportar Excel</button>
+      <button class="sb-btn" style="background:var(--bg4);color:var(--text);border:1px solid var(--border)" onclick="openModal('importExcel')">⬆️ Importar Excel</button>
     </div>
   </div>
 
-  <!-- MAIN AREA -->
-  <div id="main-area">
-    <!-- Desktop header -->
-    <div id="desktop-header">
-      <div class="dh-left"><p><span id="sync-dot" class="local"></span><span id="sync-lbl">modo local</span></p><h1>💚 Finanças · Kelvin &amp; Karol</h1></div>
-      <div class="dh-btns">
-        <button class="dh-btn" style="background:var(--bg3);color:var(--muted)" onclick="openModal('add')">＋ Novo lançamento</button>
-        <button class="dh-btn" style="background:var(--accent);color:#080F0B;font-weight:700" onclick="exportExcel()">⬇️ Excel</button>
-        <button class="dh-btn" style="background:var(--bg3);color:var(--muted)" onclick="openModal('importExcel')">⬆️ Importar</button>
+  <!-- MAIN -->
+  <div id="main">
+    <!-- TOP BAR -->
+    <div id="topbar">
+      <div class="tb-left">
+        <div class="tb-sync"><span id="sync-dot-m" class="sd-local"></span><span id="sync-lbl-m" style="font-size:10px;color:var(--muted)">local</span></div>
+        <div class="tb-title" id="pageTitle">📊 DRE / Resumo</div>
+      </div>
+      <div class="tb-right">
+        <button class="tb-btn" style="background:var(--bg3);color:var(--muted);border:1px solid var(--border)" onclick="openModal('ai')" title="Importar IA">✨</button>
+        <button class="tb-btn" style="background:var(--bg3);color:var(--muted);border:1px solid var(--border)" onclick="exportExcel()">⬇️</button>
+        <button class="tb-btn" style="background:var(--mint);color:#060D08" onclick="openModal('add')">＋ Novo</button>
       </div>
     </div>
 
-    <!-- Mobile header -->
-    <div id="mobile-header">
-      <div>
-        <div class="mh-sub">👫 K &amp; K &nbsp;<span id="sync-dot-m" class="local" style="width:6px;height:6px;border-radius:50%;display:inline-block;background:var(--muted)"></span><span id="sync-lbl-m" style="font-size:10px;color:var(--muted)">local</span></div>
-        <div class="mh-title">💚 K&K</div>
+    <!-- MONTH NAV -->
+    <div id="monthnav">
+      <div class="mn-year">
+        <button class="mn-year-btn" onclick="changeYear(-1)">‹</button>
+        <span class="mn-year-lbl" id="yearLbl">2026</span>
+        <button class="mn-year-btn" onclick="changeYear(1)">›</button>
       </div>
-      <div class="hdr-btns">
-        <button class="icon-btn" onclick="openModal('closing')" title="Fechamento">📅</button>
-        <button class="icon-btn" onclick="openModal('goals')" title="Metas">🎯</button>
-        <button class="icon-btn" onclick="openModal('bills')" title="Faturas">📋</button>
-        <button class="icon-btn" onclick="openModal('cardsMgr')">💳</button>
-        <button class="icon-btn" onclick="openModal('ai')">✨</button>
-        <button class="icon-btn pri" onclick="openModal('add')">＋</button>
-      </div>
+      <div class="mn-months" id="monthBtns"></div>
     </div>
 
-    <!-- Month pills -->
-    <div class="pills" id="monthPills"></div>
-    <!-- Owner pills -->
-    <div class="pills" id="ownerPills"></div>
-    <!-- Mobile tabs -->
-    <div class="tabs" id="mobileTabs">
-      <button class="tab active" onclick="setTab('home',this)">📊 Resumo</button>
-      <button class="tab" onclick="setTab('list',this)">📋 Lançamentos</button>
-      <button class="tab" onclick="setTab('groups',this)">🗂️ Grupos</button>
-      <button class="tab" onclick="setTab('fixed',this)">📌 Fixos</button>
-      <button class="tab" onclick="setTab('saldos',this)">💰 Saldos</button>
+    <!-- MOBILE TABS -->
+    <div id="mobtabs">
+      <button class="mt-tab active" onclick="nav('home',this)">📊 DRE</button>
+      <button class="mt-tab" onclick="nav('gastos',this)">📈 Grupos</button>
+      <button class="mt-tab" onclick="nav('list',this)">📋 Lançamentos</button>
+      <button class="mt-tab" onclick="nav('faturas',this)">💳 Faturas</button>
+      <button class="mt-tab" onclick="nav('saldos',this)">🏦 Saldos</button>
+      <button class="mt-tab" onclick="nav('fixas',this)">📌 Fixas</button>
     </div>
 
-    <div class="scroll" id="pageContent"><div class="empty"><div class="empty-ico">⏳</div><p>Carregando...</p></div></div>
+    <!-- CONTENT -->
+    <div id="content"><div class="empty"><div class="empty-ico">⏳</div><p>Carregando...</p></div></div>
   </div>
 
-  <!-- Bottom nav (mobile) -->
-  <div id="bottom-nav">
-    <button class="bn-btn active" onclick="mobileNav('home',this)"><span class="bn-ico">📊</span>Resumo</button>
-    <button class="bn-btn" onclick="mobileNav('list',this)"><span class="bn-ico">📋</span>Gastos</button>
-    <button class="bn-btn" onclick="mobileNav('groups',this)"><span class="bn-ico">🗂️</span>Grupos</button>
-    <button class="bn-btn" onclick="mobileNav('fixed',this)"><span class="bn-ico">📌</span>Fixos</button>
-    <button class="bn-btn" onclick="mobileNav('saldos',this)"><span class="bn-ico">💰</span>Saldos</button>
-    <button class="bn-btn" onclick="openModal('add')"><span class="bn-ico">➕</span>Novo</button>
+  <!-- BOTTOM NAV -->
+  <div id="botnav">
+    <button class="bn-item active" onclick="nav('home',this)"><span class="bn-ico">📊</span>DRE</button>
+    <button class="bn-item" onclick="nav('gastos',this)"><span class="bn-ico">📈</span>Grupos</button>
+    <button class="bn-item" onclick="nav('list',this)"><span class="bn-ico">📋</span>Lançamentos</button>
+    <button class="bn-item" onclick="nav('faturas',this)"><span class="bn-ico">💳</span>Faturas</button>
+    <button class="bn-item" onclick="nav('saldos',this)"><span class="bn-ico">🏦</span>Saldos</button>
+    <button class="bn-item" onclick="openModal('add')"><span class="bn-ico">➕</span>Novo</button>
   </div>
 </div>
 <div id="modalRoot"></div>
@@ -253,20 +264,6 @@ textarea.input{resize:vertical;min-height:80px}
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <script>
-// ════════════════════════════════════════════════════════════
-//  FIREBASE — substitua pelos seus dados após criar o projeto
-// ════════════════════════════════════════════════════════════
-const FB = {
-  apiKey:"AIzaSyDctc7MevUjSBn0Lr9RIRJcLVh1vxuhTEE",
-  authDomain:"despesaskk.firebaseapp.com",
-  databaseURL:"https://despesaskk-default-rtdb.firebaseio.com",
-  projectId:"despesaskk",
-  storageBucket:"despesaskk.firebasestorage.app",
-  messagingSenderId:"713410998205",
-  appId:"1:713410998205:web:7d83a2a480766d7ae5ecd4"
-};
-// ════════════════════════════════════════════════════════════
-
 // ── DATA ─────────────────────────────────────────────────────
 const OWNERS=[{id:"kelvin",l:"Kelvin",c:"#4B8EF8",e:"👨"},{id:"karol",l:"Karol",c:"#F05C8E",e:"👩"},{id:"nos",l:"Nós",c:"#8B6FE8",e:"👫"},{id:"outros",l:"Outros",c:"#5A6480",e:"🧾"}];
 const MONTHS_S=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -385,10 +382,20 @@ function setBilling(card,ds){
 function pKey(s,e){return s.toISOString().slice(0,10)+"__"+e.toISOString().slice(0,10)}
 function monthKey(y,m){return`${y}-${String(m+1).padStart(2,"0")}`}
 function syncDot(st,lbl){
- ["sync-dot","sync-dot-sb","sync-dot-m"].forEach(id=>{const el=document.getElementById(id);if(el){el.className="";el.classList.add(st);}});
- ["sync-lbl","sync-lbl-sb","sync-lbl-m"].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=lbl;});
+ const cls={ok:"sd-ok",syncing:"sd-syncing",err:"sd-err",local:"sd-local"}[st]||"sd-local";
+ ["sync-dot","sync-dot-m"].forEach(id=>{const el=document.getElementById(id);if(el){el.className=cls;}});
+ ["sync-lbl","sync-lbl-m"].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=lbl;});
 }
 
+const FB = {
+  apiKey:"AIzaSyDctc7MevUjSBn0Lr9RIRJcLVh1vxuhTEE",
+  authDomain:"despesaskk.firebaseapp.com",
+  databaseURL:"https://despesaskk-default-rtdb.firebaseio.com",
+  projectId:"despesaskk",
+  storageBucket:"despesaskk.firebasestorage.app",
+  messagingSenderId:"713410998205",
+  appId:"1:713410998205:web:7d83a2a480766d7ae5ecd4"
+};
 // ── FIREBASE ────────────────────────────────────────────────
 let DB=null;
 function initFB(){
@@ -446,8 +453,14 @@ function mTx(){return S.transactions.filter(t=>{const d=new Date(t.date+"T00:00:
 function fTx(){const m=mTx();return S.filterOwner==="all"?m:m.filter(t=>t.owner===S.filterOwner)}
 
 // ── RENDER ENGINE ────────────────────────────────────────────
-function render(){renderMonthPills();renderOwnerPills();renderPage()}
+function render(){renderMonthNav();renderPage()}
 
+function renderMonthNav(){
+ const el=document.getElementById("monthBtns");
+ const yl=document.getElementById("yearLbl");
+ if(yl)yl.textContent=S.filterYear;
+ if(el)el.innerHTML=MONTHS_S.map((m,i)=>`<button class="mn-m${S.filterMonth===i?" active":""}" onclick="setMonth(${i})">${m}</button>`).join("");
+}
 function renderMonthPills(){
  const el=document.getElementById("monthPills");if(!el)return;
  el.innerHTML=MONTHS_S.map((m,i)=>`<button class="pill${S.filterMonth===i?" active":""}" style="${S.filterMonth===i?"background:var(--blue);":""}" onclick="setMonth(${i})">${m}</button>`).join("");
@@ -458,144 +471,121 @@ function renderOwnerPills(){
  el.innerHTML=all.map(o=>`<button class="pill${S.filterOwner===o.id?" active":""}" style="${S.filterOwner===o.id?`background:${o.c};`:""}border-color:${S.filterOwner===o.id?o.c:"transparent"}" onclick="setOwner('${o.id}')">${o.e} ${o.l}</button>`).join("");
 }
 function renderPage(){
- const el=document.getElementById("pageContent");if(!el)return;
+ const el=document.getElementById("content");if(!el)return;
  if(!S.loaded){el.innerHTML=`<div class="empty"><div class="empty-ico">⏳</div><p>Carregando...</p></div>`;return}
  if(S.tab==="home")el.innerHTML=renderHome();
+ else if(S.tab==="gastos")el.innerHTML=renderGroups();
  else if(S.tab==="list")el.innerHTML=renderList();
+ else if(S.tab==="faturas")el.innerHTML=renderBillsPage();
+ else if(S.tab==="saldos")el.innerHTML=renderSaldos();
+ else if(S.tab==="fixas")el.innerHTML=renderFixed();
  else if(S.tab==="groups")el.innerHTML=renderGroups();
  else if(S.tab==="fixed")el.innerHTML=renderFixed();
- else if(S.tab==="saldos")el.innerHTML=renderSaldos();
  else if(S.tab==="bills")el.innerHTML=renderBillsPage();
 }
 
 // ── HOME ─────────────────────────────────────────────────────
 function renderHome(){
- const mt=mTx(),ft=fTx();
- // Credit card items don't count as direct outflow — only confirmed invoice payments do
- const creditCardTxIds=new Set(S.transactions.filter(t=>t.method==="Crédito").map(t=>t.id));
- const nonCreditSaidas=mt.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito").reduce((a,b)=>a+b.amount,0);
- // Confirmed invoice payments due THIS month
- const invoicePayments=Object.values(S.billedInvoices).filter(inv=>
-  inv.confirmed&&inv.payMonth===S.filterMonth&&inv.payYear===S.filterYear
- );
- const invoiceTotal=invoicePayments.reduce((a,b)=>a+b.total,0);
- const saidas=nonCreditSaidas+invoiceTotal;
- const entradas=mt.filter(t=>t.txType==="entrada").reduce((a,b)=>a+b.amount,0);
- const total=saidas;
+ const mt=mTx();
+ // Split transactions
+ const nonCreditSaidas=mt.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito");
+ const entradas=mt.filter(t=>t.txType==="entrada");
+ const invPay=Object.values(S.billedInvoices).filter(inv=>inv.confirmed&&inv.payMonth===S.filterMonth&&inv.payYear===S.filterYear);
+ const creditItems=mt.filter(t=>t.method==="Crédito"&&(!t.txType||t.txType==="saida"));
+ // Confirmed invoice totals (for cash flow)
+ const invTotal=invPay.reduce((a,b)=>a+b.total,0);
+ // Contas fixas this month
+ const mk=monthKey(S.filterYear,S.filterMonth);
+ const fixasLançadas=S.fixedAccounts.map(fa=>{const v=S.fixedLogs[fa.id]?.[mk];return v||0;}).reduce((a,b)=>a+b,0);
+ const fixasPendentes=S.fixedAccounts.filter(fa=>!S.fixedLogs[fa.id]?.[mk]&&fa.fixed).reduce((a,b)=>a+(b.valor||0),0);
+ // Other saidas (non-credit, non-fixed)
+ const totalEntradas=entradas.reduce((a,b)=>a+b.amount,0);
+ const outrasDesps=nonCreditSaidas.reduce((a,b)=>a+b.amount,0);
+ const totalSaidas=outrasDesps+invTotal;
+ // Saldo
  const totalBal=Object.values(S.balances).reduce((s,b)=>s+(b.value||0),0);
- const saldoInicial=S.monthStartBalance?.[monthKey(S.filterYear,S.filterMonth)]||totalBal;
- const balancoFinal=saldoInicial+entradas-saidas;
- const pendFixed=S.fixedAccounts.filter(fa=>{const log=S.fixedLogs[fa.id]?.[monthKey(S.filterYear,S.filterMonth)];return !log&&fa.fixed;}).reduce((a,b)=>a+(b.valor||0),0);
- const ajustes=mt.filter(t=>t.txType==="entrada"&&(t.incomeType||"").includes("Ajuste"));
- const balanceCardHTML=`<div style="background:linear-gradient(135deg,#0A2218,#061510);border:1px solid rgba(78,204,163,.2);border-radius:16px;padding:15px;margin-bottom:10px">
-  <div style="font-size:10px;color:var(--mint);opacity:.7;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">📊 Balanço ${MONTHS_F[S.filterMonth]}</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-   <div style="background:rgba(78,204,163,.08);border-radius:10px;padding:9px 11px">
-    <div style="font-size:10px;color:var(--accent);margin-bottom:2px">🟢 Entradas</div>
-    <div style="font-size:17px;font-weight:800;color:var(--accent)">${fmtBRL(entradas)}</div>
-   </div>
-   <div style="background:rgba(240,96,96,.08);border-radius:10px;padding:9px 11px">
-    <div style="font-size:10px;color:var(--red);margin-bottom:2px">🔴 Saídas</div>
-    <div style="font-size:17px;font-weight:800;color:var(--red)">${fmtBRL(saidas)}</div>
-   </div>
-  </div>
-  <div style="border-top:1px solid rgba(78,204,163,.15);padding-top:10px">
-   <div style="display:flex;justify-content:space-between;align-items:center">
+ const saldoInicial=S.monthStartBalance?.[mk]||totalBal;
+ const saldoFinal=saldoInicial+totalEntradas-totalSaidas;
+ // Pending invoices alert
+ const pendInvCount=S.cards.reduce((count,c)=>{
+  const key=invoiceKey(c.id,S.filterYear,S.filterMonth);
+  const hasTx=mt.some(t=>t.method==="Crédito"&&t.cardId===c.id);
+  return hasTx&&!S.billedInvoices[key]?count+1:count;
+ },0);
+ // Ajustes pendentes
+ const ajustes=entradas.filter(t=>(t.incomeType||"").includes("Ajuste"));
+ // Owner breakdown (saidas only, non-credit)
+ const ownerBreak=OWNERS.map(o=>{
+  const v=nonCreditSaidas.filter(t=>t.owner===o.id).reduce((a,b)=>a+b.amount,0);
+  const vi=invPay.filter(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);return c&&c.owner===o.id;}).reduce((a,b)=>a+b.total,0);
+  return{...o,total:v+vi};
+ }).filter(o=>o.total>0);
+ // Alerts
+ const alerts=[];
+ if(pendInvCount>0) alerts.push(`<div class="reminder"><div class="row"><span style="font-size:12px;font-weight:700;color:var(--gold)">⚠️ ${pendInvCount} fatura(s) aguardando confirmação</span><button onclick="nav('faturas')" style="background:var(--gold);border:none;border-radius:7px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:700;color:#060D08">Ver faturas</button></div></div>`);
+ if(ajustes.length>0) alerts.push(`<div class="reminder"><span style="font-size:12px;font-weight:700;color:var(--gold)">⚠️ ${ajustes.length} ajuste(s) gerencial(is) não classificado(s)</span></div>`);
+ if(fixasPendentes>0) alerts.push(`<div class="reminder"><div class="row"><span style="font-size:12px;font-weight:700;color:var(--gold)">📌 Fixas pendentes ~${fmtBRL(fixasPendentes)}</span><button onclick="nav('fixas')" style="background:none;border:1px solid var(--goldbd);border-radius:7px;padding:4px 10px;cursor:pointer;font-size:11px;color:var(--gold)">Registrar</button></div></div>`);
+ // Goals breached
+ allGroups().filter(g=>S.goals[g.id]>0).forEach(g=>{
+  const spent=mt.filter(t=>getGroup(t.category)?.id===g.id&&(!t.txType||t.txType==="saida")).reduce((a,b)=>a+b.amount,0);
+  if(spent>S.goals[g.id]) alerts.push(`<div class="reminder" style="background:var(--redbg);border-color:var(--redbd)"><span style="font-size:12px;font-weight:700;color:var(--red)">🚨 Meta ${g.l}: ${fmtBRL(spent)} / ${fmtBRL(S.goals[g.id])}</span></div>`);
+ });
+
+ return`
+ ${alerts.join("")}
+ <!-- DRE -->
+ <div class="dre">
+  <div class="dre-header">
+   <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">📊 Demonstrativo — ${MONTHS_F[S.filterMonth]} ${S.filterYear}</div>
+   <div style="display:flex;justify-content:space-between;align-items:flex-end">
     <div>
-     <div style="font-size:10px;color:var(--muted)">Saldo inicial do mês</div>
-     <div style="font-size:13px;font-weight:700;color:var(--text)">
-      ${fmtBRL(saldoInicial)}
-      <button onclick="openModal('setSaldoInicial')" style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;margin-left:4px">✏️</button>
-     </div>
+     <div style="font-size:11px;color:var(--muted)">Saldo inicial</div>
+     <div style="font-size:16px;font-weight:800">${fmtBRL(saldoInicial)} <button onclick="openModal('setSaldoInicial')" style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer">✏️</button></div>
     </div>
     <div style="text-align:right">
-     <div style="font-size:10px;color:var(--muted)">Saldo projetado</div>
-     <div style="font-size:20px;font-weight:900;color:${balancoFinal>=0?"var(--accent)":"var(--red)"}">${fmtBRL(balancoFinal)}</div>
-     ${balancoFinal<0?`<div style="font-size:10px;color:var(--red)">⚠️ Saldo negativo!</div>`:""}
+     <div style="font-size:11px;color:var(--muted)">Saldo final</div>
+     <div style="font-size:22px;font-weight:900;color:${saldoFinal>=0?"var(--mint)":"var(--red)"}">${fmtBRL(saldoFinal)}</div>
+     ${saldoFinal<0?`<div style="font-size:10px;color:var(--red)">⚠️ Saldo negativo</div>`:""}
     </div>
    </div>
-   ${invoicePayments.length>0?`<div style="margin-top:7px;background:rgba(240,96,96,.08);border-radius:8px;padding:6px 10px;">
-    <div style="font-size:10px;color:var(--red);margin-bottom:3px;font-weight:700">💳 Pagamentos de fatura neste mês</div>
-    ${invoicePayments.map(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);const ac=S.accounts.find(x=>x.id===inv.accountId);return`<div class="row" style="padding:3px 0"><span style="font-size:11px">${c?escH(c.name):"Cartão"} <span style="color:var(--muted);font-size:10px">(${MONTHS_F[inv.chargeMonth]})</span></span><span style="font-size:11px;font-weight:700;color:var(--red)">${fmtBRL(inv.total)}</span></div>`;}).join("")}
-   </div>`:""}
-   ${pendFixed>0?`<div style="margin-top:7px;font-size:11px;color:var(--gold)">📌 Fixas pendentes estimadas: ${fmtBRL(pendFixed)}</div>`:""}
-   ${ajustes.length>0?`<div style="margin-top:7px;background:rgba(245,200,66,.1);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--gold)">⚠️ ${ajustes.length} ajuste(s) gerencial(is) pendente(s) de classificação</div>`:""}
   </div>
- </div>`;
- const byWeek={};ft.forEach(t=>{const w=getWeek(t.date);if(!byWeek[w])byWeek[w]=[];byWeek[w].push(t)});
- const oBadges=OWNERS.map(o=>{const v=mt.filter(t=>t.owner===o.id&&(!t.txType||t.txType==="saida")).reduce((a,b)=>a+b.amount,0);return v?`<span style="font-size:11px;background:${o.c}22;color:${o.c};padding:2px 9px;border-radius:20px">${o.e} ${fmtBRL(v)}</span>`:""}).join("");
-
- // Reminders — fixed accounts with no log this month
- const mk=monthKey(S.filterYear,S.filterMonth);
- const reminders=S.fixedAccounts.filter(fa=>{
-  const log=S.fixedLogs[fa.id]?.[mk];
-  return !log&&fa.fixed;
- });
- const reminderHTML=reminders.length?`<div class="sec-title">⚠️ Pendentes este mês</div>`+
-  reminders.map(fa=>`<div class="reminder-card row" onclick="openModal('fixedLog','${fa.id}')">
-   <div><div style="font-size:13px;font-weight:600">${escH(fa.desc)}</div>
-    <div style="font-size:11px;color:var(--muted)">Vence dia ${fa.venc} ${fa.variable?"· valor variável":fa.valor?`· ${fmtBRL(fa.valor)}`:""}</div></div>
-   <span class="badge pending-badge">Pendente</span>
-  </div>`).join(""):"";
-
- // Card current periods
- const cardBoxes=S.cards.map(c=>{
-  const cp=setBilling(c,todayStr()),key=pKey(cp.start,cp.end);
-  const items=S.transactions.filter(t=>t.method==="Crédito"&&t.cardId===c.id&&pKey(setBilling(c,t.date).start,setBilling(c,t.date).end)===key);
-  const ct=items.reduce((a,b)=>a+b.amount,0);
-  const ow=OWNERS.find(x=>x.id===c.owner);
-  return`<div onclick="setTab('bills')" style="background:linear-gradient(135deg,${c.color}33,${c.color}11);border-radius:13px;padding:11px 14px;min-width:150px;cursor:pointer;flex-shrink:0;border-left:3px solid ${c.color}">
-   <div style="font-size:11px;color:var(--muted);margin-bottom:2px">${escH(c.name)} ${ow?.e||""}</div>
-   <div style="font-size:19px;font-weight:800;margin-bottom:3px">${fmtBRL(ct)}</div>
-   <div style="font-size:10px;color:var(--muted)">Fecha ${fmtDate(cp.end)}</div>
-   <div style="font-size:10px;color:var(--gold)">Vence ${fmtDate(cp.payDate)}</div>
-  </div>`;}).join("");
-
- // Goals
- const goalsHTML=GROUPS.filter(g=>S.goals[g.id]>0).map(g=>{
-  const spent=ft.filter(t=>getGroup(t.category)?.id===g.id).reduce((a,b)=>a+b.amount,0);
-  const goal=S.goals[g.id],p=pct(spent,goal),over=p>=100;
-  return`<div class="card-sm">
-   <div class="row" style="margin-bottom:5px"><span style="font-size:13px;font-weight:600">${g.l}</span>
-    <div><span style="font-size:13px;font-weight:700">${fmtBRL(spent)}</span><span style="font-size:11px;color:var(--muted)"> / ${fmtBRL(goal)}</span></div></div>
-   <div class="pbar"><div class="pbar-fill" style="width:${p}%;background:${over?"var(--red)":g.c}"></div></div>
-   <div class="row" style="margin-top:3px"><span style="font-size:10px;color:var(--muted)">${p.toFixed(0)}%</span>
-    <span style="font-size:10px;color:${over?"var(--red)":"var(--green)"}">${over?`⚠️ +${fmtBRL(spent-goal)}`:`Restam ${fmtBRL(goal-spent)}`}</span></div>
-  </div>`;}).join("");
-
- const weeksHTML=Object.keys(byWeek).sort((a,b)=>b.localeCompare(a)).map(w=>{
-  const items=byWeek[w],tot=items.reduce((a,b)=>a+b.amount,0);
-  const rows=items.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4).map(t=>{
-   const o=OWNERS.find(x=>x.id===t.owner),g=getGroup(t.category),sub=(t.category||"").split(" > ")[1];
-   const ib=t.installments?`<span class="badge install-badge">${t.installments.current}/${t.installments.total}x</span>`:"";
-   const fb=t.fixed?`<span class="badge fixed-badge">Fixo</span>`:"";
-   return`<div class="row" style="padding:5px 0;border-top:1px solid var(--border);cursor:pointer" onclick="editTx('${t.id}')">
-    <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-     <span style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${escH(t.desc)}</span>${ib}${fb}</div>
-     ${g?`<span style="font-size:10px;color:${g.c}">${escH(sub||"")}</span>`:""}
-    </div>
-    <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-     <span style="font-size:11px;color:${o?.c}">${o?.e||""}</span>
-     <span style="font-size:13px;font-weight:600">${fmtBRL(t.amount)}</span>
-     <span style="font-size:11px;color:var(--muted)">›</span>
-    </div>
-   </div>`;}).join("");
-  const more=items.length>4?`<p style="font-size:10px;color:var(--muted);margin-top:4px;text-align:right">+${items.length-4} mais</p>`:"";
-  return`<div class="card"><div class="row" style="margin-bottom:7px"><span style="font-size:12px;font-weight:700;color:var(--muted)">Semana ${wkLabel(w)}</span><span style="font-size:15px;font-weight:800;color:var(--red)">${fmtBRL(tot)}</span></div>${rows}${more}</div>`;
- }).join("");
-
- const empty=!Object.keys(byWeek).length?`<div class="empty"><div class="empty-ico">📭</div><p>Nenhum lançamento este mês</p></div>`:"";
- return`
-  <div style="background:linear-gradient(135deg,#0D2A1A,#0A1F12);border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid rgba(78,204,163,.2)">
-   <div style="font-size:11px;color:var(--mint);opacity:.8;margin-bottom:2px">${MONTHS_F[S.filterMonth]} ${S.filterYear} · ${mt.length} lanç.</div>
-   <div style="font-size:30px;font-weight:900;font-family:var(--hfont);color:var(--white);margin-bottom:8px">${fmtBRL(total)}</div>
-   <div style="display:flex;gap:5px;flex-wrap:wrap">${oBadges}</div>
+  <!-- Entradas -->
+  <div class="dre-row">
+   <span class="dre-lbl main">🟢 Entradas</span>
+   <span class="dre-val pos">${fmtBRL(totalEntradas)}</span>
   </div>
-  ${balanceCardHTML}
-  ${reminderHTML}
-  ${S.cards.length?`<div class="sec-title">💳 Faturas abertas</div><div style="display:flex;gap:9px;overflow-x:auto;scrollbar-width:none;margin-bottom:2px;padding-bottom:4px">${cardBoxes}</div>`:""}
-  ${goalsHTML?`<div class="sec-title">🎯 Metas do mês</div>${goalsHTML}`:""}
-  <div class="sec-title">⚡ Por semana</div>${weeksHTML}${empty}`;
+  ${entradas.length?entradas.reduce((acc,t)=>{const it=acc.find(x=>x.type===(t.incomeType||"Outros"));if(it)it.v+=t.amount;else acc.push({type:t.incomeType||"Outros",v:t.amount});return acc;},[]).map(x=>`<div class="dre-row sub"><span class="dre-lbl sub">↳ ${escH(x.type)}</span><span class="dre-val pos" style="font-size:12px">${fmtBRL(x.v)}</span></div>`).join(""):""}
+  <!-- Saídas -->
+  <div class="dre-row">
+   <span class="dre-lbl main">🔴 Saídas</span>
+   <span class="dre-val neg">${fmtBRL(totalSaidas)}</span>
+  </div>
+  ${invPay.length?`<div class="dre-row sub"><span class="dre-lbl sub">↳ 💳 Fatura cartão de crédito</span><span class="dre-val neg" style="font-size:12px">${fmtBRL(invTotal)}</span></div>`:""}
+  ${invPay.map(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);return`<div class="dre-row sub" style="padding-left:36px"><span class="dre-lbl sub" style="font-size:10px">↳ ${c?escH(c.name):"Cartão"} (${MONTHS_F[inv.chargeMonth]})</span><span class="dre-val neg" style="font-size:11px">${fmtBRL(inv.total)}</span></div>`;}).join("")}
+  ${fixasLançadas>0?`<div class="dre-row sub"><span class="dre-lbl sub">↳ 📌 Contas fixas</span><span class="dre-val neg" style="font-size:12px">${fmtBRL(fixasLançadas)}</span></div>`:""}
+  ${outrasDesps>0?`<div class="dre-row sub"><span class="dre-lbl sub">↳ 📦 Outras despesas</span><span class="dre-val neg" style="font-size:12px">${fmtBRL(outrasDesps)}</span></div>`:""}
+  <!-- Resultado -->
+  <div class="dre-row total">
+   <span class="dre-lbl main">📊 Resultado do mês</span>
+   <span class="dre-val big ${totalEntradas-totalSaidas>=0?"pos":"neg"}">${fmtBRL(totalEntradas-totalSaidas)}</span>
+  </div>
+ </div>
+ <!-- Owner breakdown -->
+ ${ownerBreak.length?`<div class="sec">👥 Por responsável</div><div class="g2">${ownerBreak.map(o=>`<div class="card-inset"><div style="font-size:11px;color:${o.c};margin-bottom:3px">${o.e} ${o.l}</div><div style="font-size:16px;font-weight:800;color:var(--red)">${fmtBRL(o.total)}</div></div>`).join("")}</div>`:""}
+ <!-- Invoice payments this month -->
+ ${invPay.length?`<div class="sec">💳 Pagamentos de fatura</div>${invPay.map(inv=>{const c=S.cards.find(x=>x.id===inv.cardId);const ac=S.accounts.find(x=>x.id===inv.accountId);return`<div class="card-sm row" style="cursor:pointer;border-left:3px solid ${c?.color||"var(--red)"}" onclick="openModal('confirmInvoice','${inv.key}')"><div><div style="font-size:13px;font-weight:700">💳 ${c?escH(c.name):"Cartão"}</div><div style="font-size:11px;color:var(--muted)">Fatura ${MONTHS_F[inv.chargeMonth]} · ${ac?escH(ac.name):""} · ${fmtDate(inv.paidDate)}</div></div><span style="font-size:15px;font-weight:800;color:var(--red)">${fmtBRL(inv.total)}</span></div>`;}).join("")}`:""}
+ <!-- Recent -->
+ <div class="sec">⚡ Últimos lançamentos</div>
+ ${mt.filter(t=>t.method!=="Crédito"||t.txType==="entrada").sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5).map(t=>{
+  const o=OWNERS.find(x=>x.id===t.owner),g=getGroup(t.category),sub=(t.category||"").split(" > ")[1];
+  const isE=t.txType==="entrada";
+  return`<div class="card-sm row" style="cursor:pointer" onclick="editTx('${t.id}')">
+   <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;margin-bottom:2px">${escH(t.desc)}</div>
+   <div style="display:flex;gap:5px;font-size:11px;color:var(--muted)">${fmtDate(t.date)} ${g?`· <span style="color:${g.c}">${escH(sub||"")}</span>`:""} · <span style="color:${o?.c}">${o?.e||""}</span></div></div>
+   <span style="font-size:14px;font-weight:800;color:${isE?"var(--mint)":"var(--red)"}; margin-left:8px;flex-shrink:0">${isE?"+":"−"}${fmtBRL(t.amount)}</span>
+  </div>`;}).join("")}
+ ${mt.filter(t=>t.method!=="Crédito"||t.txType==="entrada").length>5?`<button onclick="nav('list')" style="background:none;border:1px solid var(--border);border-radius:10px;padding:9px;width:100%;color:var(--muted);font-family:'Nunito',sans-serif;font-size:12px;cursor:pointer;margin-top:4px">Ver todos os lançamentos →</button>`:""}
+ `;
 }
 
 // ── LIST ─────────────────────────────────────────────────────
@@ -862,28 +852,28 @@ function toggleEl(id){const el=document.getElementById(id);if(el)el.style.displa
 
 // ── NAVIGATION ───────────────────────────────────────────────
 function setMonth(i){S.filterMonth=i;render()}
+function changeYear(d){S.filterYear+=d;render()}
 function setOwner(id){S.filterOwner=id;render()}
-function setTab(id,btn){
+const PAGE_TITLES={home:"📊 DRE / Resumo",gastos:"📈 Gastos por Grupo",list:"📋 Lançamentos",faturas:"💳 Faturas",saldos:"🏦 Saldos & Contas",fixas:"📌 Contas Fixas"};
+function nav(id,btn){
  S.tab=id;
- if(btn){document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));btn.classList.add("active")}
- document.querySelectorAll(".bn-btn").forEach(b=>b.classList.remove("active"));
- const mbn=document.querySelector(`.bn-btn[onclick*="'${id}'"]`);if(mbn)mbn.classList.add("active");
+ // sidebar
+ document.querySelectorAll(".sb-item").forEach(b=>b.classList.remove("active"));
+ const sbi=document.querySelector(`.sb-item[onclick*="'${id}'"]`);if(sbi)sbi.classList.add("active");
+ // mobile tabs
+ document.querySelectorAll(".mt-tab").forEach(b=>b.classList.remove("active"));
+ const mti=document.querySelector(`.mt-tab[onclick*="'${id}'"]`);if(mti)mti.classList.add("active");
+ // bottom nav
+ document.querySelectorAll(".bn-item").forEach(b=>b.classList.remove("active"));
+ const bni=document.querySelector(`.bn-item[onclick*="'${id}'"]`);if(bni)bni.classList.add("active");
+ // title
+ const pt=document.getElementById("pageTitle");if(pt)pt.textContent=PAGE_TITLES[id]||"";
+ if(btn&&btn.classList.contains("bn-item")){document.querySelectorAll(".bn-item").forEach(b=>b.classList.remove("active"));btn.classList.add("active");}
  renderPage();
 }
-function sbNav(id,btn){
- S.tab=id;
- document.querySelectorAll(".sb-btn").forEach(b=>b.classList.remove("active"));
- if(btn)btn.classList.add("active");
- renderPage();
-}
-function mobileNav(id,btn){
- S.tab=id;
- document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
- const tab=document.querySelector(`.tab[onclick*="'${id}'"]`);if(tab)tab.classList.add("active");
- document.querySelectorAll(".bn-btn").forEach(b=>b.classList.remove("active"));
- if(btn)btn.classList.add("active");
- renderPage();
-}
+function setTab(id,btn){nav(id,btn);}
+function sbNav(id,btn){nav(id,btn);}
+function mobileNav(id,btn){nav(id,btn);}
 function editTx(id){const t=S.transactions.find(x=>x.id===id);if(t)openModal("edit",t)}
 
 // ── TX MODAL ────────────────────────────────────────────────
@@ -1609,11 +1599,12 @@ function normalizeDate(d){
 
 // ── INIT ─────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded",()=>{
- renderMonthPills();renderOwnerPills();initFB();
+ renderMonthNav();initFB();
  // Safety fallback: if Firebase hangs for 6s, render in local mode
  setTimeout(()=>{if(!S.loaded){S.loaded=true;syncDot("local","modo local");render();}},6000);
 });
-if(document.readyState!=="loading"){renderMonthPills();renderOwnerPills();initFB();}
+if(document.readyState!=="loading"){renderMonthNav();initFB();}
+
 </script>
 </body>
 </html>
