@@ -169,6 +169,8 @@ textarea.input{resize:vertical;min-height:65px}
     <button class="sb-nav-item" onclick="nav('cad_cards',this)"><span class="ico">💳</span>Cartões</button>
     <button class="sb-nav-item" onclick="nav('cad_contas',this)"><span class="ico">🏦</span>Contas Bancárias</button>
     <button class="sb-nav-item" onclick="nav('cad_fixas',this)"><span class="ico">📌</span>Contas Fixas Cad.</button>
+    <button class="sb-nav-item" onclick="nav('apto',this)"><span class="ico">🏗️</span>Apartamento</button>
+    <button class="sb-nav-item" onclick="nav('historico',this)"><span class="ico">📉</span>Consultas Históricas</button>
     <div class="sb-sec">Ferramentas</div>
     <button class="sb-nav-item" onclick="openModal('ai')"><span class="ico">✨</span>Importar com IA</button>
     <button class="sb-nav-item" onclick="openModal('tools')"><span class="ico">⚙️</span>Ferramentas</button>
@@ -203,7 +205,8 @@ textarea.input{resize:vertical;min-height:65px}
       <button class="mt-tab" onclick="nav('faturas',this)">📄 Faturas</button>
       <button class="mt-tab" onclick="nav('saldos',this)">🏦 Saldos</button>
       <button class="mt-tab" onclick="nav('fixas',this)">📌 Fixas</button>
-      <button class="mt-tab" onclick="nav('cad_cat',this)">🗂️ Cadastros</button>
+      <button class="mt-tab" onclick="nav('apto',this)">🏗️ Apto</button>
+      <button class="mt-tab" onclick="nav('historico',this)">📉 Histórico</button>
     </div>
     <div id="content"><div class="empty"><div class="empty-ico">⏳</div><p>Carregando...</p></div></div>
   </div>
@@ -289,8 +292,18 @@ let S={
  goals:{},
  customGroups:[],
  establishments:[],    // [{id,name,category,icon}]
+ apto:{                 // Apartamento control
+  vivaz:{totalParcelas:0,parcAtual:0,valorParcela:0,dataEntrega:"",pagamentos:{}},
+  obra:{valorTotal:0,pagamentos:{}},
+  financiamento:{valorTotal:0,prazo:0,parcela:0,inicio:"",pagamentos:{}},
+  condominio:{valor:0,inicio:"",pagamentos:{}},
+  iptu:{valor:0,pagamentos:{}},
+  reformas:[],          // [{id,desc,valor,data,obs}]
+ },
  cardDateOverrides:{}, // {cardId: {YYYY-MM: {closeDay,payDay}}}
  fixedPaid:{},         // {faId: {YYYY-MM: true/false}}
+ startMonth:4,  // May = index 4
+ startYear:2026,
  filterMonth:new Date().getMonth(),
  filterYear:new Date().getFullYear(),
  tab:"home",
@@ -363,8 +376,10 @@ function initFB(){
     if(d.monthStartBalance)S.monthStartBalance=d.monthStartBalance;
     if(d.cardDateOverrides)S.cardDateOverrides=d.cardDateOverrides;
     if(d.fixedPaid)S.fixedPaid=d.fixedPaid;
+    if(d.apto)S.apto={...S.apto,...d.apto};
     if(d.customGroups)S.customGroups=Object.values(d.customGroups);
     if(d.establishments)S.establishments=Object.values(d.establishments);
+    if(d.apto)S.apto={...S.apto,...d.apto};
    } else {
     DB.ref("kk").set({
      transactions:{},cards:Object.fromEntries(DEFAULT_CARDS.map(c=>[c.id,c])),
@@ -395,9 +410,53 @@ function toggleFixaPaid(faId,mk,paid){
  if(!faId)return;
  if(!S.fixedPaid)S.fixedPaid={};
  if(!S.fixedPaid[faId])S.fixedPaid[faId]={};
- S.fixedPaid[faId][mk]=paid;
- fbSet("fixedPaid/"+faId+"/"+mk,paid);
+ if(paid)S.fixedPaid[faId][mk]={paid:true,date:todayStr()};
+ else delete S.fixedPaid[faId][mk];
+ fbSet("fixedPaid/"+faId+"/"+mk,paid?{paid:true,date:todayStr()}:null);
  render();toast(paid?"✅ Marcada como paga":"↺ Pendente");
+}
+function isBeforeStart(year,month){
+ return year<S.startYear||(year===S.startYear&&month<S.startMonth);
+}
+function isFixaPaid(faId,mk){const v=S.fixedPaid?.[faId]?.[mk];return v===true||v?.paid===true;}
+function openPayDateModal(key,checked){
+ if(!checked){markInvoicePaid(key,false);return;}
+ const inv=S.billedInvoices[key];if(!inv)return;
+ const root=document.getElementById("modalRoot");
+ root.innerHTML=`<div class="overlay" onclick="if(event.target===this){closeModal();document.querySelector('[onchange*=\'${key}\']').checked=false;}"><div class="sheet">
+  <div class="sh-hdr"><div><div class="sh-title">✅ Confirmar pagamento</div><div class="sh-sub">Fatura ${MONTHS_F[inv.chargeMonth]}/${inv.chargeYear} · ${fmtBRL(inv.total)}</div></div><button class="xbtn" onclick="closeModal();document.querySelector('[onchange*=\'${key}\']').checked=false">✕</button></div>
+  <label class="lbl">Data do pagamento</label>
+  <input class="input" id="pdDate" type="date" value="${inv.paidDate||todayStr()}" style="font-size:16px;margin-bottom:14px">
+  <div class="fbrow"><button class="btn btn-ghost" onclick="closeModal();document.querySelector('[onchange*=\'${key}\']').checked=false">Cancelar</button>
+  <button class="btn btn-pri" onclick="markInvoicePaidWithDate('${key}',document.getElementById('pdDate').value)">✅ Confirmar</button></div>
+ </div></div>`;
+}
+function markInvoicePaidWithDate(key,date){
+ if(!S.billedInvoices[key])return;
+ S.billedInvoices[key].paid=true;
+ S.billedInvoices[key].paidDate=date;
+ fbSet("billedInvoices/"+key+"/paid",true);
+ fbSet("billedInvoices/"+key+"/paidDate",date);
+ closeModal();render();toast("✅ Pagamento registrado em "+fmtDate(date));
+}
+function openFixaPayDateModal(faId,mk,checked){
+ if(!checked){toggleFixaPaid(faId,mk,false);return;}
+ const fa=S.fixedAccounts.find(f=>f.id===faId);
+ const root=document.getElementById("modalRoot");
+ root.innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+  <div class="sh-hdr"><div><div class="sh-title">✅ Confirmar pagamento</div><div class="sh-sub">${escH(fa?.desc||"Conta fixa")}</div></div><button class="xbtn" onclick="closeModal()">✕</button></div>
+  <label class="lbl">Data do pagamento</label>
+  <input class="input" id="fdDate" type="date" value="${todayStr()}" style="font-size:16px;margin-bottom:14px">
+  <div class="fbrow"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  <button class="btn btn-pri" onclick="toggleFixaPaidWithDate('${faId}','${mk}',document.getElementById('fdDate').value)">✅ Confirmar</button></div>
+ </div></div>`;
+}
+function toggleFixaPaidWithDate(faId,mk,date){
+ if(!S.fixedPaid)S.fixedPaid={};
+ if(!S.fixedPaid[faId])S.fixedPaid[faId]={};
+ S.fixedPaid[faId][mk]={paid:true,date};
+ fbSet("fixedPaid/"+faId+"/"+mk,{paid:true,date});
+ closeModal();render();toast("✅ Pagamento registrado em "+fmtDate(date));
 }
 function markInvoicePaid(key,paid){
  if(!S.billedInvoices[key])return;
@@ -409,10 +468,22 @@ function saveCustomGroup(g){S.customGroups=[...S.customGroups.filter(x=>x.id!==g
 function deleteCustomGroup(id){S.customGroups=S.customGroups.filter(x=>x.id!==id);fbDel("customGroups/"+id);render();}
 function saveEstablishment(e){S.establishments=[...S.establishments.filter(x=>x.id!==e.id),e];fbSet("establishments/"+e.id,e);render();}
 function deleteEstablishment(id){S.establishments=S.establishments.filter(x=>x.id!==id);fbDel("establishments/"+id);render();}
+function saveApto(section,data){
+ if(!S.apto)S.apto={vivaz:{},obra:{},financiamento:{},condominio:{},iptu:{},reformas:[]};
+ S.apto[section]={...S.apto[section],...data};
+ fbSet("apto/"+section,S.apto[section]);
+ render();toast("✓ Salvo");
+}
+function saveAptoPayment(section,mk,val,paid){
+ if(!S.apto[section].pagamentos)S.apto[section].pagamentos={};
+ S.apto[section].pagamentos[mk]={val,paid,date:todayStr()};
+ fbSet("apto/"+section+"/pagamentos/"+mk,{val,paid,date:todayStr()});
+ render();toast("✓ Pagamento registrado");
+}
 function saveMonthStartBal(mk,v){if(!S.monthStartBalance)S.monthStartBalance={};S.monthStartBalance[mk]=v;fbSet("monthStartBalance",S.monthStartBalance);}
 
 // ── NAV ──────────────────────────────────────────────────────
-const PAGE_TITLES={home:"📊 DRE / Resumo",gastos:"📈 Resumo de Gastos",cartoes:"💳 Gestão de Cartões",list:"📋 Lançamentos",faturas:"💳 Faturas",saldos:"🏦 Saldos & Contas",fixas:"📌 Contas Fixas",cad_cat:"🗂️ Categorias",cad_cards:"💳 Cartões",cad_contas:"🏦 Contas Bancárias",cad_fixas:"📌 Contas Fixas — Cadastro"};
+const PAGE_TITLES={home:"📊 DRE / Resumo",gastos:"📈 Resumo de Gastos",cartoes:"💳 Gestão de Cartões",apto:"🏗️ Apartamento Vivaz",historico:"📉 Consultas Históricas",list:"📋 Lançamentos",faturas:"💳 Faturas",saldos:"🏦 Saldos & Contas",fixas:"📌 Contas Fixas",cad_cat:"🗂️ Categorias",cad_cards:"💳 Cartões",cad_contas:"🏦 Contas Bancárias",cad_fixas:"📌 Contas Fixas — Cadastro"};
 function nav(id,btn){
  S.tab=id;
  document.querySelectorAll(".sb-nav-item").forEach(b=>b.classList.remove("active"));
@@ -435,7 +506,7 @@ function render(){renderMonthNav();renderPage()}
 function renderPage(){
  const el=document.getElementById("content");if(!el)return;
  if(!S.loaded){el.innerHTML=`<div class="empty"><div class="empty-ico">⏳</div><p>Carregando...</p></div>`;return}
- const map={home:renderHome,gastos:renderGastos,list:renderList,cartoes:renderCartoesGerencial,faturas:renderBillsPage,saldos:renderSaldos,fixas:renderFixed,cad_cat:renderCadCat,cad_cards:renderCadCards,cad_contas:renderCadContas,cad_fixas:renderCadFixas};
+ const map={home:renderHome,gastos:renderGastos,list:renderList,cartoes:renderCartoesGerencial,faturas:renderBillsPage,saldos:renderSaldos,fixas:renderFixed,apto:renderApto,historico:renderHistorico,cad_cat:renderCadCat,cad_cards:renderCadCards,cad_contas:renderCadContas,cad_fixas:renderCadFixas};
  el.innerHTML=(map[S.tab]||renderHome)();
 }
 function editTx(id){const t=S.transactions.find(x=>x.id===id);if(t)openModal("edit",t)}
@@ -536,21 +607,23 @@ function renderHome(){
   ...invPagas.map(i=>{const c=S.cards.find(x=>x.id===i.cardId);return{key:i.key,paid:true,label:`${c?c.name:""} ${OWNERS.find(o=>o.id===c?.owner)?.e||""} — Fatura ${MONTHS_F[i.chargeMonth]}/${i.chargeYear} ${c?.debitoAuto?"🔄":"✋"}`,value:i.total};}),
   ...invPrev.map(i=>{const c=S.cards.find(x=>x.id===i.cardId);return{key:i.key,paid:false,label:`${c?c.name:""} ${OWNERS.find(o=>o.id===c?.owner)?.e||""} — Fatura ${MONTHS_F[i.chargeMonth]}/${i.chargeYear} ${c?.debitoAuto?"🔄":"✋"} ⏳`,value:i.total};}),
  ];
- const faChld=faLancadas.map(({fa,v,paid})=>({faId:fa.id,paid,label:fa.desc,value:v}));
+ const faChld=faLancadas.map(({fa,v})=>({faId:fa.id,paid:isFixaPaid(fa.id,mk),label:fa.desc,value:v}));
  const dirChld=Object.entries(dirByGrp).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:k,value:v}));
 
  function dreChkBlock(ico,label,total,colorCls,children,blockId){
   const has=children&&children.length>0;
   return`<div>
-   <div class="dre-row${has?" clickable":""}" ${has?`onclick="dreToggle('${blockId}')"`:""}><div style="display:flex;align-items:center;gap:6px">
-    ${has?`<span id="arr_${blockId}" style="font-size:10px;color:var(--muted);display:inline-block;transition:.2s">▶</span>`:`<span style="width:14px;display:inline-block"></span>`}
-    <span class="dre-lbl h">${ico} ${escH(label)}</span></div>
+   <div class="dre-row" style="${has?"cursor:default":""}">
+    <div style="display:flex;align-items:center;gap:6px;flex:1" ${has?`onclick="dreToggle('${blockId}')" style="cursor:pointer"`:"" }>
+     ${has?`<span id="arr_${blockId}" style="font-size:10px;color:var(--muted);display:inline-block;transition:.2s">▶</span>`:`<span style="width:14px;display:inline-block"></span>`}
+     <span class="dre-lbl h">${ico} ${escH(label)}</span>
+    </div>
     <span class="dre-val ${colorCls}">${fmtBRL(total)}</span>
    </div>
    ${has?`<div id="${blockId}" style="display:none">${children.map(c=>{
     const hasChk=c.key||c.faId;
-    return`<div class="dre-row sub" style="gap:8px" onclick="event.stopPropagation()"><div style="display:flex;align-items:center;gap:7px;flex:1">
-     ${hasChk?`<input type="checkbox" ${c.paid?"checked":""} onchange="${c.key?`markInvoicePaid('${c.key}',this.checked)`:`toggleFixaPaid('${c.faId}','${mk}',this.checked)`}" onclick="event.stopPropagation()" style="accent-color:var(--mint);width:14px;height:14px;cursor:pointer;flex-shrink:0">`:"<span style='width:14px;display:inline-block'></span>"}
+    return`<div class="dre-row sub" style="gap:8px"><div style="display:flex;align-items:center;gap:7px;flex:1">
+     ${hasChk?`<input type="checkbox" ${c.paid?"checked":""} onchange="${c.key?`openPayDateModal('${c.key}',this.checked)`:`openFixaPayDateModal('${c.faId}','${mk}',this.checked)`}" onclick="event.stopPropagation()" style="accent-color:var(--mint);width:14px;height:14px;cursor:pointer;flex-shrink:0">`:"<span style='width:14px;display:inline-block'></span>"}
      <span class="dre-lbl s">${escH(c.label)}</span>
     </div><span class="dre-val ${colorCls}" style="font-size:12px">${fmtBRL(c.value)}</span></div>`;
    }).join("")}</div>`:""}
@@ -594,16 +667,26 @@ function renderHome(){
    ${invChld.length>0?dreChkBlock("💳","Pagamentos de Fatura",totalInvPagas+totalInvPrev,"neg",invChld,"dblk_inv"):""}
    ${faChld.length>0?dreChkBlock("📌","Contas Fixas",totalFaLanc,"neg",faChld,"dblk_fa"):""}
    ${dirChld.length>0?dreChkBlock("📦","Outras Despesas",totalDir,"neg",dirChld,"dblk_dir"):""}
-   ${totalPrevisto>0?`
-   <div class="dre-row" style="background:rgba(245,200,66,.06);border-top:1px solid var(--goldbd)" onclick="dreToggle('dblk_prev')">
-    <div style="display:flex;align-items:center;gap:6px;cursor:pointer"><span id="arr_dblk_prev" style="font-size:10px;color:var(--gold);display:inline-block;transition:.2s">▶</span>
-     <div><span class="dre-lbl h" style="color:var(--gold)">⏳ A pagar este mês (previsto)</span><div style="font-size:10px;color:var(--muted)">Ainda não debitado</div></div></div>
-    <span class="dre-val" style="color:var(--gold)">${fmtBRL(totalPrevisto)}</span>
-   </div>
-   <div id="dblk_prev" style="display:none">
-    ${invPrev.map(i=>{const c=S.cards.find(x=>x.id===i.cardId);return`<div class="dre-row sub" onclick="event.stopPropagation()"><span class="dre-lbl s">💳 ${c?escH(c.name):""} — Fatura ${MONTHS_F[i.chargeMonth]}/${i.chargeYear} · vence ${fmtDate(i.paidDate)}</span><span class="dre-val" style="font-size:12px;color:var(--gold)">${fmtBRL(i.total)}</span></div>`;}).join("")}
-    ${faPend.map(fa=>`<div class="dre-row sub" onclick="event.stopPropagation()"><span class="dre-lbl s">📌 ${escH(fa.desc)}${fa.valor?` · est. ${fmtBRL(fa.valor)}`:""}</span><span class="dre-val" style="font-size:12px;color:var(--gold)">${fmtBRL(fa.valor||0)}</span></div>`).join("")}
-   </div>`:""}
+   ${(()=>{
+    // Pending = invoices not paid + fixed accounts not paid (both pending log and logged but not marked paid)
+    const faUnpaid=[...faPend,...faLancadas.filter(({fa})=>!isFixaPaid(fa.id,mk))];
+    const totalFaUnpaid=faUnpaid.reduce((a,b)=>a+(b.v||b.valor||0),0);
+    const totalPrev2=totalInvPrev+totalFaUnpaid;
+    if(totalPrev2<=0)return"";
+    return`<div>
+     <div class="dre-row" style="background:rgba(245,200,66,.06);border-top:1px solid var(--goldbd)">
+      <div style="display:flex;align-items:center;gap:6px;cursor:pointer;flex:1" onclick="dreToggle('dblk_prev')">
+       <span id="arr_dblk_prev" style="font-size:10px;color:var(--gold);display:inline-block;transition:.2s">▶</span>
+       <div><span class="dre-lbl h" style="color:var(--gold)">⏳ A pagar este mês (previsto)</span><div style="font-size:10px;color:var(--muted)">Ainda não debitado</div></div>
+      </div>
+      <span class="dre-val" style="color:var(--gold)">${fmtBRL(totalPrev2)}</span>
+     </div>
+     <div id="dblk_prev" style="display:none">
+      ${invPrev.map(i=>{const c=S.cards.find(x=>x.id===i.cardId);return`<div class="dre-row sub"><span class="dre-lbl s">💳 ${c?escH(c.name):""} — Fatura ${MONTHS_F[i.chargeMonth]}/${i.chargeYear} · vence ${fmtDate(i.paidDate)}</span><span class="dre-val" style="font-size:12px;color:var(--gold)">${fmtBRL(i.total)}</span></div>`;}).join("")}
+      ${faUnpaid.map(x=>{const fa=x.fa||x;const v=x.v||x.valor||0;return`<div class="dre-row sub"><span class="dre-lbl s">📌 ${escH(fa.desc)}${v?" · "+fmtBRL(v):""}</span><span class="dre-val" style="font-size:12px;color:var(--gold)">${fmtBRL(v)}</span></div>`;}).join("")}
+     </div>
+    </div>`;
+   })()}
    ${totalEntradas===0&&totalSaidasReal===0&&totalPrevisto===0?`<div style="text-align:center;padding:22px;color:var(--muted);font-size:13px">Nenhum movimento em ${MONTHS_F[S.filterMonth]}.<br><button onclick="openModal('add')" style="background:var(--mint);border:none;border-radius:9px;padding:8px 18px;cursor:pointer;font-weight:700;color:#060D08;font-family:'Nunito',sans-serif;margin-top:10px">＋ Lançar</button></div>`:""}
   </div>
   ${ownerRows.length?`<div class="sec">👥 Por responsável</div>${ownerRows.map(o=>{const p=totalSaidasReal>0?Math.round((o.total/totalSaidasReal)*100):0;return`<div class="card-in"><div class="row" style="margin-bottom:5px"><span style="font-size:13px;font-weight:700;color:${o.c}">${o.e} ${o.l}</span><div><span style="font-size:14px;font-weight:800;color:var(--red)">${fmtBRL(o.total)}</span><span style="font-size:11px;color:var(--muted);margin-left:5px">${p}%</span></div></div><div class="pbar"><div class="pbar-fill" style="width:${p}%;background:${o.c}"></div></div></div>`;}).join("")}`:""}
@@ -882,6 +965,289 @@ function renderGastos(){
  `}`;
 }
 
+function renderApto(){
+ const ap=S.apto||{};
+ const vv=ap.vivaz||{totalParcelas:0,parcAtual:0,valorParcela:0,dataEntrega:"",pagamentos:{}};
+ const ob=ap.obra||{valorTotal:0,pagamentos:{}};
+ const fi=ap.financiamento||{valorTotal:0,prazo:0,parcela:0,inicio:"",pagamentos:{}};
+ const co=ap.condominio||{valor:0,inicio:"",pagamentos:{}};
+ const ip=ap.iptu||{valor:0,pagamentos:{}};
+ const rf=ap.reformas||[];
+
+ // Progress calc for vivaz
+ const vivazPago=Object.values(vv.pagamentos||{}).filter(p=>p.paid).reduce((a,b)=>a+(b.val||0),0);
+ const vivazTotal=(vv.totalParcelas||0)*(vv.valorParcela||0);
+ const vivazPct=vivazTotal>0?Math.round((vivazPago/vivazTotal)*100):0;
+
+ // Obra progress
+ const obraPago=Object.values(ob.pagamentos||{}).filter(p=>p.paid).reduce((a,b)=>a+(b.val||0),0);
+ const obraPct=ob.valorTotal>0?Math.round((obraPago/ob.valorTotal)*100):0;
+
+ const mk=monthKey(S.filterYear,S.filterMonth);
+
+ function secCard(title,color,content2){
+  return`<div class="card" style="border-left:4px solid ${color};margin-bottom:10px"><div style="font-size:14px;font-weight:800;color:${color};margin-bottom:10px">${title}</div>${content2}</div>`;
+ }
+ function payRow(section,mk2,label,val,existPay){
+  const paid=existPay?.paid||false;
+  const pDate=existPay?.date||"";
+  return`<div class="card-in row" style="margin-bottom:5px">
+   <div><div style="font-size:13px;font-weight:600">${escH(label)}</div>${pDate&&paid?`<div style="font-size:10px;color:var(--muted)">Pago em ${fmtDate(pDate)}</div>`:""}
+   </div>
+   <div style="display:flex;align-items:center;gap:8px">
+    <span style="font-size:14px;font-weight:800">${fmtBRL(val)}</span>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+     <input type="checkbox" ${paid?"checked":""} onchange="saveAptoPayment('${section}','${mk2}',${val},this.checked)" onclick="event.stopPropagation()" style="accent-color:var(--mint);width:15px;height:15px">
+     <span style="font-size:11px;color:${paid?"var(--mint)":"var(--muted)"}">${paid?"✅ Pago":"Marcar pago"}</span>
+    </label>
+   </div>
+  </div>`;
+ }
+
+ // Vivaz section — current month payment
+ const vivazPayMk=payRow("vivaz",mk,
+  `Parcela ${vv.parcAtual||"?"}/${vv.totalParcelas||"?"} — ${MONTHS_F[S.filterMonth]}`,
+  vv.valorParcela||0, vv.pagamentos?.[mk]);
+
+ // Obra current month
+ const obraPayMk=payRow("obra",mk,
+  `Evolução de Obra — ${MONTHS_F[S.filterMonth]}`,
+  ob.valorMensal||0, ob.pagamentos?.[mk]);
+
+ // Format pago history
+ function paidHistory(pagamentos){
+  const entries=Object.entries(pagamentos||{}).filter(([,v])=>v.paid).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,6);
+  if(!entries.length)return`<p style="font-size:11px;color:var(--muted)">Nenhum pagamento registrado.</p>`;
+  return entries.map(([k,v])=>`<div class="row" style="padding:4px 0;border-bottom:1px solid var(--faint)"><span style="font-size:11px;color:var(--muted)">${MONTHS_F[parseInt(k.split("-")[1])-1]}/${k.split("-")[0]}</span><div><span style="font-size:11px;font-weight:700">${fmtBRL(v.val||0)}</span>${v.date?`<span style="font-size:10px;color:var(--muted);margin-left:5px">${fmtDate(v.date)}</span>`:""}</div></div>`).join("");
+ }
+
+ // Reformas
+ const rfRows=rf.map((r,i)=>`<div class="card-in row" style="margin-bottom:5px"><div><div style="font-size:13px;font-weight:600">${escH(r.desc)}</div><div style="font-size:10px;color:var(--muted)">${fmtDate(r.data)}${r.obs?" · "+escH(r.obs):""}</div></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:800;color:var(--orange)">${fmtBRL(r.valor||0)}</span><button onclick="delReforma(${i})" style="background:none;border:1px solid var(--redbd);border-radius:6px;color:var(--red);font-size:10px;padding:2px 7px;cursor:pointer;font-family:'Nunito',sans-serif">🗑</button></div></div>`).join("");
+
+ return`
+ <div class="sec" style="margin-top:0">🏗️ APARTAMENTO VIVAZ — Controle</div>
+ <div style="background:linear-gradient(135deg,#0D1A2A,#081012);border-radius:var(--r2);padding:14px;margin-bottom:12px;border:1px solid rgba(91,156,248,.2)">
+  <div class="row" style="margin-bottom:10px"><span style="font-size:12px;color:var(--muted)">Previsão de entrega</span><span style="font-size:13px;font-weight:700">${vv.dataEntrega||"—"}</span></div>
+  <div class="row" style="margin-bottom:6px"><span style="font-size:12px;color:var(--muted)">Total do imóvel</span><span style="font-size:13px;font-weight:700">${fmtBRL(vivazTotal)}</span></div>
+  <div class="row" style="margin-bottom:6px"><span style="font-size:12px;color:var(--muted)">Pago até agora</span><span style="font-size:13px;font-weight:700;color:var(--mint)">${fmtBRL(vivazPago)}</span></div>
+  <div class="pbar" style="height:8px;margin:8px 0"><div class="pbar-fill" style="width:${vivazPct}%;background:var(--blue);height:8px"></div></div>
+  <div class="row"><span style="font-size:10px;color:var(--muted)">${vivazPct}% pago</span><span style="font-size:10px;color:var(--muted)">Restam ${fmtBRL(vivazTotal-vivazPago)}</span></div>
+ </div>
+
+ <!-- Mensalidade Vivaz -->
+ ${secCard("📅 Mensalidade Vivaz","#8B6FE8",`
+  <div class="g2" style="margin-bottom:10px">
+   <div><label class="lbl">Valor da parcela</label><input class="input" type="number" step="0.01" value="${vv.valorParcela||""}" placeholder="0,00" onchange="saveApto('vivaz',{valorParcela:+this.value})"></div>
+   <div><label class="lbl">Parcela atual</label><input class="input" type="number" value="${vv.parcAtual||""}" placeholder="Ex: 12" onchange="saveApto('vivaz',{parcAtual:+this.value})"></div>
+   <div><label class="lbl">Total de parcelas</label><input class="input" type="number" value="${vv.totalParcelas||""}" placeholder="Ex: 60" onchange="saveApto('vivaz',{totalParcelas:+this.value})"></div>
+   <div><label class="lbl">Previsão entrega</label><input class="input" type="month" value="${vv.dataEntrega||""}" onchange="saveApto('vivaz',{dataEntrega:this.value})"></div>
+  </div>
+  <div class="sec" style="margin-top:0">Pagamento de ${MONTHS_F[S.filterMonth]}</div>
+  ${vivazPayMk}
+  <div class="sec">Histórico de pagamentos</div>
+  ${paidHistory(vv.pagamentos)}
+ `)}
+
+ <!-- Evolução de Obra -->
+ ${secCard("🏗️ Evolução de Obra","#F0A830",`
+  <div class="g2" style="margin-bottom:10px">
+   <div><label class="lbl">Valor total previsto</label><input class="input" type="number" step="0.01" value="${ob.valorTotal||""}" placeholder="0,00" onchange="saveApto('obra',{valorTotal:+this.value})"></div>
+   <div><label class="lbl">Valor mensal</label><input class="input" type="number" step="0.01" value="${ob.valorMensal||""}" placeholder="0,00" onchange="saveApto('obra',{valorMensal:+this.value})"></div>
+  </div>
+  <div class="pbar" style="height:6px;margin:4px 0 10px"><div class="pbar-fill" style="width:${obraPct}%;background:var(--gold);height:6px"></div></div>
+  <div class="row" style="margin-bottom:10px"><span style="font-size:11px;color:var(--muted)">${obraPct}% — ${fmtBRL(obraPago)} de ${fmtBRL(ob.valorTotal||0)}</span></div>
+  <div class="sec" style="margin-top:0">Pagamento de ${MONTHS_F[S.filterMonth]}</div>
+  ${obraPayMk}
+  <div class="sec">Histórico</div>
+  ${paidHistory(ob.pagamentos)}
+ `)}
+
+ <!-- Financiamento Caixa -->
+ ${secCard("🏦 Financiamento Caixa","#3DD68C",`
+  <div style="background:var(--goldbg);border:1px solid var(--goldbd);border-radius:9px;padding:9px 12px;margin-bottom:10px;font-size:11px;color:var(--gold)">⏳ Ativo após entrega do imóvel</div>
+  <div class="g2">
+   <div><label class="lbl">Valor financiado</label><input class="input" type="number" step="0.01" value="${fi.valorTotal||""}" placeholder="0,00" onchange="saveApto('financiamento',{valorTotal:+this.value})"></div>
+   <div><label class="lbl">Prazo (meses)</label><input class="input" type="number" value="${fi.prazo||""}" placeholder="360" onchange="saveApto('financiamento',{prazo:+this.value})"></div>
+   <div><label class="lbl">Parcela estimada</label><input class="input" type="number" step="0.01" value="${fi.parcela||""}" placeholder="0,00" onchange="saveApto('financiamento',{parcela:+this.value})"></div>
+   <div><label class="lbl">Início previsto</label><input class="input" type="month" value="${fi.inicio||""}" onchange="saveApto('financiamento',{inicio:this.value})"></div>
+  </div>
+ `)}
+
+ <!-- Condomínio -->
+ ${secCard("🏢 Condomínio","#30C8D8",`
+  <div style="background:var(--goldbg);border:1px solid var(--goldbd);border-radius:9px;padding:9px 12px;margin-bottom:10px;font-size:11px;color:var(--gold)">⏳ Ativo após entrega do imóvel</div>
+  <div class="g2">
+   <div><label class="lbl">Valor estimado/mês</label><input class="input" type="number" step="0.01" value="${co.valor||""}" placeholder="0,00" onchange="saveApto('condominio',{valor:+this.value})"></div>
+   <div><label class="lbl">Início previsto</label><input class="input" type="month" value="${co.inicio||""}" onchange="saveApto('condominio',{inicio:this.value})"></div>
+  </div>
+ `)}
+
+ <!-- IPTU -->
+ ${secCard("📋 IPTU","#F07840",`
+  <div class="g2" style="margin-bottom:10px">
+   <div><label class="lbl">Valor anual</label><input class="input" type="number" step="0.01" value="${ip.valor||""}" placeholder="0,00" onchange="saveApto('iptu',{valor:+this.value})"></div>
+  </div>
+  <div class="sec" style="margin-top:0">Histórico de pagamentos</div>
+  ${paidHistory(ip.pagamentos)}
+  <button onclick="saveAptoPayment('iptu','${mk}',S.apto?.iptu?.valor||0,true)" style="background:none;border:1px solid var(--mintbd);border-radius:8px;color:var(--mint);font-size:11px;padding:6px 12px;cursor:pointer;font-family:'Nunito',sans-serif;width:100%;margin-top:6px">✅ Registrar pagamento IPTU ${S.filterYear}</button>
+ `)}
+
+ <!-- Reformas -->
+ ${secCard("🔨 Reformas & Acabamento","#F05C8E",`
+  ${rfRows}
+  <button onclick="openModal('addReforma')" style="background:var(--mint);border:none;border-radius:9px;color:#060D08;font-size:12px;font-weight:700;padding:8px;width:100%;cursor:pointer;font-family:'Nunito',sans-serif;margin-top:6px">＋ Registrar gasto de reforma</button>
+ `)}
+ `;
+}
+function delReforma(i){if(confirm("Excluir?")){{S.apto.reformas.splice(i,1);fbSet("apto/reformas",S.apto.reformas);render();}}}
+
+// ── HISTORICO ───────────────────────────────────────────────────────
+function renderHistorico(){
+ // Build month range: startMonth to current
+ const months=[];
+ let y=S.startYear,m=S.startMonth;
+ const nowY=new Date().getFullYear(),nowM=new Date().getMonth();
+ while(y<nowY||(y===nowY&&m<=nowM)){months.push({y,m});m++;if(m>11){m=0;y++;}}
+
+ if(months.length===0)return`<div class="empty"><div class="empty-ico">📉</div><p>Nenhum dado histórico ainda</p></div>`;
+
+ // Aggregate by month
+ const byMonth=months.map(({y,m})=>{
+  const mk2=monthKey(y,m);
+  const txs=S.transactions.filter(t=>{const d=new Date(t.date+"T00:00:00");return d.getMonth()===m&&d.getFullYear()===y;});
+  const entradas=txs.filter(t=>t.txType==="entrada").reduce((a,b)=>a+b.amount,0);
+  const saidas=txs.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito").reduce((a,b)=>a+b.amount,0);
+  const faturas=Object.values(S.billedInvoices).filter(i=>i.confirmed&&i.payMonth===m&&i.payYear===y).reduce((a,b)=>a+b.total,0);
+  const fixas=Object.entries(S.fixedLogs).reduce((sum,[faId,logs])=>sum+(logs[mk2]||0),0);
+  const totalSaidas=saidas+faturas;
+  return{y,m,mk:mk2,label:`${MONTHS_S[m]}/${y}`,entradas,saidas:totalSaidas,fixas,resultado:entradas-totalSaidas};
+ });
+
+ // SVG line chart
+ const W=Math.max(400,months.length*52),H=200,PAD=40;
+ const maxVal=Math.max(...byMonth.flatMap(b=>[b.entradas,b.saidas,Math.abs(b.resultado)]),100);
+ function toY(v){return PAD+((H-2*PAD)*(1-v/maxVal));}
+ function toX(i){return PAD+(i/(Math.max(byMonth.length-1,1)))*(W-2*PAD);}
+
+ const entPath=byMonth.map((b,i)=>`${i===0?"M":"L"}${toX(i).toFixed(0)},${toY(b.entradas).toFixed(0)}`).join(" ");
+ const saiPath=byMonth.map((b,i)=>`${i===0?"M":"L"}${toX(i).toFixed(0)},${toY(b.saidas).toFixed(0)}`).join(" ");
+ const resPath=byMonth.map((b,i)=>`${i===0?"M":"L"}${toX(i).toFixed(0)},${toY(Math.abs(b.resultado)).toFixed(0)}`).join(" ");
+ const zero=toY(0).toFixed(0);
+
+ const dots=byMonth.map((b,i)=>`
+  <circle cx="${toX(i)}" cy="${toY(b.entradas)}" r="4" fill="var(--mint)" title="${b.label}: ${fmtBRL(b.entradas)}"/>
+  <circle cx="${toX(i)}" cy="${toY(b.saidas)}" r="4" fill="var(--red)"/>
+ `).join("");
+
+ const labels=byMonth.map((b,i)=>`<text x="${toX(i)}" y="${H-8}" text-anchor="middle" fill="var(--muted)" font-size="10" font-family="Nunito">${b.label}</text>`).join("");
+
+ const gridLines=[0,0.25,0.5,0.75,1].map(f=>{
+  const v=maxVal*f,y2=toY(v);
+  return`<line x1="${PAD}" x2="${W-PAD}" y1="${y2}" y2="${y2}" stroke="var(--border)" stroke-dasharray="3,3"/>
+   <text x="${PAD-4}" y="${y2+4}" text-anchor="end" fill="var(--muted)" font-size="9" font-family="Nunito">${v>=1000?Math.round(v/1000)+"k":Math.round(v)}</text>`;
+ }).join("");
+
+ const svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="overflow:visible">
+  ${gridLines}
+  <path d="${entPath}" stroke="var(--mint)" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+  <path d="${saiPath}" stroke="var(--red)" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+  ${dots}
+  ${labels}
+  <!-- Legend -->
+  <circle cx="${PAD}" cy="14" r="5" fill="var(--mint)"/><text x="${PAD+10}" y="18" fill="var(--mint)" font-size="10" font-family="Nunito">Entradas</text>
+  <circle cx="${PAD+70}" cy="14" r="5" fill="var(--red)"/><text x="${PAD+80}" y="18" fill="var(--red)" font-size="10" font-family="Nunito">Saídas</text>
+ </svg>`;
+
+ // Table
+ const tableRows=byMonth.slice().reverse().map(b=>`<tr>
+  <td style="padding:7px 10px;font-size:12px;font-weight:700;white-space:nowrap">${b.label}</td>
+  <td style="padding:7px 10px;font-size:12px;color:var(--mint);text-align:right">${fmtBRL(b.entradas)}</td>
+  <td style="padding:7px 10px;font-size:12px;color:var(--red);text-align:right">${fmtBRL(b.saidas)}</td>
+  <td style="padding:7px 10px;font-size:12px;font-weight:700;color:${b.resultado>=0?"var(--mint)":"var(--red)"};text-align:right">${b.resultado>=0?"+":""}${fmtBRL(b.resultado)}</td>
+ </tr>`).join("");
+
+ // By category summary
+ const catSummary={};
+ S.transactions.filter(t=>!isBeforeStart(new Date(t.date+"T00:00:00").getFullYear(),new Date(t.date+"T00:00:00").getMonth())).forEach(t=>{
+  if(!t.txType||t.txType==="saida"){const g=getGroup(t.category);const k=g?g.l:"📦 Outros";catSummary[k]=(catSummary[k]||0)+t.amount;}
+ });
+ const catRows=Object.entries(catSummary).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>`<tr><td style="padding:6px 10px;font-size:12px">${escH(k)}</td><td style="padding:6px 10px;font-size:12px;color:var(--red);text-align:right;font-weight:700">${fmtBRL(v)}</td></tr>`).join("");
+
+ return`
+ <div class="row" style="margin-bottom:12px">
+  <div class="sec" style="margin:0">📉 Histórico a partir de ${MONTHS_F[S.startMonth]} ${S.startYear}</div>
+  <button onclick="exportHistorico()" style="background:var(--mint);border:none;border-radius:8px;color:#060D08;font-size:11px;font-weight:700;padding:5px 11px;cursor:pointer;font-family:'Nunito',sans-serif">⬇️ Exportar</button>
+ </div>
+ <div class="card" style="margin-bottom:12px;overflow-x:auto">
+  <div class="sec" style="margin-top:0">Entradas vs Saídas por mês</div>
+  ${svg}
+ </div>
+ <div class="card" style="margin-bottom:12px;overflow-x:auto">
+  <div class="sec" style="margin-top:0">Tabela mensal</div>
+  <table style="width:100%;border-collapse:collapse">
+   <tr style="border-bottom:1px solid var(--border)">
+    <th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Mês</th>
+    <th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Entradas</th>
+    <th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Saídas</th>
+    <th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Resultado</th>
+   </tr>
+   ${tableRows}
+  </table>
+ </div>
+ <div class="card" style="margin-bottom:12px;overflow-x:auto">
+  <div class="sec" style="margin-top:0">Top categorias (acumulado)</div>
+  <table style="width:100%;border-collapse:collapse">
+   <tr style="border-bottom:1px solid var(--border)"><th style="padding:6px 10px;text-align:left;font-size:10px;color:var(--muted)">Categoria</th><th style="padding:6px 10px;text-align:right;font-size:10px;color:var(--muted)">Total</th></tr>
+   ${catRows}
+  </table>
+ </div>
+ `;
+}
+function exportHistorico(){
+ if(typeof XLSX==="undefined"){toast("⚠️ Aguarde o carregamento");return;}
+ const months=[];let y=S.startYear,m=S.startMonth;
+ const nowY=new Date().getFullYear(),nowM=new Date().getMonth();
+ while(y<nowY||(y===nowY&&m<=nowM)){months.push({y,m});m++;if(m>11){m=0;y++;}}
+ const rows=months.map(({y,m})=>{
+  const mk2=monthKey(y,m);
+  const txs=S.transactions.filter(t=>{const d=new Date(t.date+"T00:00:00");return d.getMonth()===m&&d.getFullYear()===y;});
+  const ent=txs.filter(t=>t.txType==="entrada").reduce((a,b)=>a+b.amount,0);
+  const sai=txs.filter(t=>(!t.txType||t.txType==="saida")&&t.method!=="Crédito").reduce((a,b)=>a+b.amount,0);
+  const fat=Object.values(S.billedInvoices).filter(i=>i.confirmed&&i.payMonth===m&&i.payYear===y).reduce((a,b)=>a+b.total,0);
+  return[`${MONTHS_S[m]}/${y}`,ent,sai+fat,ent-(sai+fat)];
+ });
+ const wb=XLSX.utils.book_new();
+ const ws=XLSX.utils.aoa_to_sheet([["Mês","Entradas","Saídas","Resultado"],...rows]);
+ XLSX.utils.book_append_sheet(wb,ws,"Histórico");
+ XLSX.writeFile(wb,"Historico_KK.xlsx");toast("✓ Exportado!");
+}
+
+// ── APTO modal (add reforma) ─────────────────────────────────────────
+
+function buildAddReformaModal(){
+ return`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="sheet">
+  <div class="sh-hdr"><div class="sh-title">🔨 Novo gasto de reforma</div><button class="xbtn" onclick="closeModal()">✕</button></div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+   <div><label class="lbl">Descrição</label><input class="input" id="rfDesc" placeholder="Ex: Piso do quarto"></div>
+   <div class="g2">
+    <div><label class="lbl">Valor (R$)</label><input class="input" id="rfVal" type="number" step="0.01" placeholder="0,00"></div>
+    <div><label class="lbl">Data</label><input class="input" id="rfDate" type="date" value="${todayStr()}"></div>
+   </div>
+   <div><label class="lbl">Observação</label><input class="input" id="rfObs" placeholder="Opcional"></div>
+   <div class="fbrow"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+   <button class="btn btn-pri" onclick="submitReforma()">💾 Salvar</button></div>
+  </div>
+ </div></div>`;
+}
+function submitReforma(){
+ const desc=(document.getElementById("rfDesc")?.value||"").trim();
+ const val=parseFloat(document.getElementById("rfVal")?.value||"0");
+ if(!desc||!val){toast("⚠️ Preencha descrição e valor");return;}
+ if(!S.apto.reformas)S.apto.reformas=[];
+ S.apto.reformas.push({id:gid(),desc,valor:val,data:document.getElementById("rfDate")?.value||todayStr(),obs:document.getElementById("rfObs")?.value||""});
+ fbSet("apto/reformas",S.apto.reformas);closeModal();render();toast("✓ Reforma registrada");
+}
+
 function renderCartoesGerencial(){
  const mk=monthKey(S.filterYear,S.filterMonth);
  const today=new Date(); today.setHours(0,0,0,0);
@@ -1094,6 +1460,7 @@ function openModal(type,data){
  else if(type==="editCard")html=buildEditCardModal(data);
  else if(type==="editAccount")html=buildEditAccountModal(data);
  else if(type==="tools")html=buildToolsModal();
+ else if(type==="addReforma")html=buildAddReformaModal();
  else if(type==="ai")html=buildAIModal();
  else if(type==="importExcel")html=buildImportExcelModal();
  root.innerHTML=html;
