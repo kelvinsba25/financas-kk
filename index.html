@@ -288,6 +288,7 @@ let S={
  customGroups:[],
  establishments:[],    // [{id,name,category,icon}]
  cardDateOverrides:{}, // {cardId: {YYYY-MM: {closeDay,payDay}}}
+ fixedPaid:{},         // {faId: {YYYY-MM: true/false}}
  filterMonth:new Date().getMonth(),
  filterYear:new Date().getFullYear(),
  tab:"home",
@@ -359,6 +360,7 @@ function initFB(){
     if(d.billedInvoices)S.billedInvoices=d.billedInvoices;
     if(d.monthStartBalance)S.monthStartBalance=d.monthStartBalance;
     if(d.cardDateOverrides)S.cardDateOverrides=d.cardDateOverrides;
+    if(d.fixedPaid)S.fixedPaid=d.fixedPaid;
     if(d.customGroups)S.customGroups=Object.values(d.customGroups);
     if(d.establishments)S.establishments=Object.values(d.establishments);
    } else {
@@ -366,7 +368,7 @@ function initFB(){
      transactions:{},cards:Object.fromEntries(DEFAULT_CARDS.map(c=>[c.id,c])),
      accounts:Object.fromEntries(DEFAULT_ACCOUNTS.map(a=>[a.id,a])),
      fixedAccounts:Object.fromEntries(DEFAULT_FIXED.map(f=>[f.id,f])),
-     fixedLogs:{},fixedSkips:{},balances:{},billedInvoices:{},
+     fixedLogs:{},fixedSkips:{},fixedPaid:{},balances:{},billedInvoices:{},
      monthStartBalance:{},goals:{},customGroups:{},establishments:{},cardDateOverrides:{}
     });
    }
@@ -386,6 +388,14 @@ function saveBalance(acId,val,date){S.balances[acId]={value:val,date};fbSet(`bal
 function saveBilledInvoice(inv){
  if(!inv.paid){const card=S.cards.find(c=>c.id===inv.cardId);const payDate=new Date(inv.paidDate+"T00:00:00");const today=new Date();today.setHours(0,0,0,0);if(card?.debitoAuto&&payDate<=today)inv.paid=true;}
  S.billedInvoices[inv.key]=inv;fbSet("billedInvoices/"+inv.key,inv);render();toast("✓ Fatura confirmada");
+}
+function toggleFixaPaid(faId,mk,paid){
+ if(!faId)return;
+ if(!S.fixedPaid)S.fixedPaid={};
+ if(!S.fixedPaid[faId])S.fixedPaid[faId]={};
+ S.fixedPaid[faId][mk]=paid;
+ fbSet("fixedPaid/"+faId+"/"+mk,paid);
+ render();toast(paid?"✅ Marcada como paga":"↺ Pendente");
 }
 function markInvoicePaid(key,paid){
  if(!S.billedInvoices[key])return;
@@ -593,8 +603,42 @@ function renderHome(){
     <div><span class="dre-lbl h">🔴 Saídas realizadas</span><div style="font-size:10px;color:var(--muted)">Já pagos / debitados</div></div></div>
    <span class="dre-val neg">${fmtBRL(totalRealized)}</span>
   </div>
-  ${totalCartaoChld>0||totalInvThisMonth>0?dreBlock("💳","Faturas de Cartão",totalInvThisMonth+(Object.values(unconfByCard).reduce((a,b)=>a+b,0)),"neg",cardChld):""}
-  ${totalFixas>0?dreBlock("📌","Contas Fixas pagas",totalFixas,"neg",fixasLancadas.map(r=>({label:r.label,value:r.value}))):""}
+  ${totalCartaoChld>0||totalInvThisMonth>0?`<div>
+   <div class="dre-row clickable" onclick="dreToggle('dblk_cards')">
+    <div style="display:flex;align-items:center;gap:6px"><span id="arr_dblk_cards" style="font-size:10px;color:var(--muted);display:inline-block;transition:.2s">▶</span><span class="dre-lbl h">💳 Faturas de Cartão</span></div>
+    <span class="dre-val neg">${fmtBRL(totalCartaoChld||totalInvThisMonth)}</span>
+   </div>
+   <div id="dblk_cards" style="display:none">
+    ${allInvThisPayMonth.map(inv=>{
+     const c=S.cards.find(x=>x.id===inv.cardId);
+     const da=c?.debitoAuto?"🔄 Déb.Auto":"✋ Manual";
+     return`<div class="dre-row sub" style="gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex:1">
+       <input type="checkbox" ${inv.paid?"checked":""} onchange="markInvoicePaid('${inv.key}',this.checked)" style="accent-color:var(--mint);width:14px;height:14px;cursor:pointer;flex-shrink:0">
+       <div><span class="dre-lbl s">${c?escH(c.name):""} ${OWNERS.find(o=>o.id===c?.owner)?.e||""} — Fatura ${MONTHS_F[inv.chargeMonth]}</span><br><span style="font-size:9px;color:var(--muted)">${da} · Vence ${fmtDate(inv.paidDate)}</span></div>
+      </div>
+      <span class="dre-val neg" style="font-size:12px">${fmtBRL(inv.total)}</span>
+     </div>`;}).join("")}
+    ${Object.entries(unconfByCard).map(([cid,v])=>{const c=S.cards.find(x=>x.id===cid);return`<div class="dre-row sub"><span class="dre-lbl s" style="color:var(--gold)">⚠️ ${c?escH(c.name):""} — não confirmada (estimado)</span><span class="dre-val" style="font-size:12px;color:var(--gold)">${fmtBRL(v)}</span></div>`;}).join("")}
+   </div>
+  </div>`:""}
+  ${totalFixas>0?`<div>
+   <div class="dre-row clickable" onclick="dreToggle('dblk_fixas')">
+    <div style="display:flex;align-items:center;gap:6px"><span id="arr_dblk_fixas" style="font-size:10px;color:var(--muted);display:inline-block;transition:.2s">▶</span><span class="dre-lbl h">📌 Contas Fixas pagas</span></div>
+    <span class="dre-val neg">${fmtBRL(totalFixas)}</span>
+   </div>
+   <div id="dblk_fixas" style="display:none">${fixasLancadas.map(r=>{
+    const fa=S.fixedAccounts.find(f=>f.desc===r.label);
+    const isPaid=fa?S.fixedPaid?.[fa.id]?.[mk]||false:true;
+    return`<div class="dre-row sub" style="gap:8px">
+     <div style="display:flex;align-items:center;gap:8px;flex:1">
+      <input type="checkbox" ${isPaid?"checked":""} onchange="toggleFixaPaid('${fa?.id||""}','${mk}',this.checked)" style="accent-color:var(--mint);width:14px;height:14px;cursor:pointer;flex-shrink:0">
+      <span class="dre-lbl s" style="color:${isPaid?"var(--muted)":"var(--text)"};text-decoration:${isPaid?"":"none"}">${escH(r.label)}</span>
+     </div>
+     <span class="dre-val neg" style="font-size:12px">${fmtBRL(r.value)}</span>
+    </div>`;}).join("")}
+   </div>
+  </div>`:""}
   ${totalOutras>0?dreBlock("📦","Outras Despesas",totalOutras,"neg",Object.entries(outrasGrp).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:k,value:v}))):""}
 
   <!-- Pendentes -->
@@ -620,16 +664,85 @@ function renderHome(){
 // ── RENDER GROUPS ────────────────────────────────────────────
 function renderGroups(){
  const mt=mTx();
+ const mk=monthKey(S.filterYear,S.filterMonth);
+
+ // ── Regular spending this month (non-credit saídas) ──────────────
  const rows=allGroups().map(g=>{
-  const items=mt.filter(t=>getGroup(t.category)?.id===g.id&&(!t.txType||t.txType==="saida"));
+  const items=mt.filter(t=>getGroup(t.category)?.id===g.id&&(!t.txType||t.txType==="saida")&&t.method!=="Crédito");
   const spent=items.reduce((a,b)=>a+b.amount,0);if(!spent)return"";
   const goal=S.goals[g.id]||0;
   const bySub={};items.forEach(t=>{const s=(t.category||"").split(" > ")[1]||"?";bySub[s]=(bySub[s]||0)+t.amount;});
   const subRows=Object.entries(bySub).sort((a,b)=>b[1]-a[1]).map(([s,v])=>`<div class="row" style="padding:5px 0;border-bottom:1px solid var(--faint)"><span style="font-size:12px;color:var(--muted)">↳ ${escH(s)}</span><span style="font-size:12px;font-weight:700">${fmtBRL(v)}</span></div>`).join("");
   const pbar=goal>0?`<div class="pbar"><div class="pbar-fill" style="width:${pct(spent,goal)}%;background:${pct(spent,goal)>=100?"var(--red)":g.c}"></div></div><div class="row" style="margin-top:3px"><span style="font-size:10px;color:var(--muted)">${pct(spent,goal).toFixed(0)}%</span><span style="font-size:10px;color:${spent>goal?"var(--red)":"var(--mint)"}">${spent>goal?"▲ +"+fmtBRL(spent-goal):"✓ −"+fmtBRL(goal-spent)}</span></div>`:"";
-  return`<div class="card" style="padding:0;overflow:hidden"><div style="padding:12px 14px;border-left:4px solid ${g.c}"><div class="row" style="margin-bottom:4px"><span style="font-weight:800;font-size:14px;color:${g.c}">${g.l}</span><div><span style="font-weight:900;font-size:16px">${fmtBRL(spent)}</span>${goal>0?`<span style="font-size:10px;color:var(--muted)"> / ${fmtBRL(goal)}</span>`:""}</div></div>${pbar}</div><div style="padding:8px 14px 12px;background:var(--faint)">${subRows}</div></div>`;
+  return`<div class="card" style="padding:0;overflow:hidden;margin-bottom:8px"><div style="padding:12px 14px;border-left:4px solid ${g.c}"><div class="row" style="margin-bottom:4px"><span style="font-weight:800;font-size:14px;color:${g.c}">${g.l}</span><div><span style="font-weight:900;font-size:16px">${fmtBRL(spent)}</span>${goal>0?`<span style="font-size:10px;color:var(--muted)"> / ${fmtBRL(goal)}</span>`:""}</div></div>${pbar}</div><div style="padding:8px 14px 12px;background:var(--faint)">${subRows}</div></div>`;
  }).join("");
- return`<div class="row" style="margin-bottom:12px"><div class="sec" style="margin:0">Grupos — ${MONTHS_S[S.filterMonth]}/${S.filterYear}</div><div style="display:flex;gap:7px"><button onclick="openModal('metas')" style="background:none;border:1px solid var(--mintbd);border-radius:8px;color:var(--mint);font-size:11px;padding:5px 10px;cursor:pointer;font-family:'Nunito',sans-serif;font-weight:700">🎯 Metas</button></div></div>${rows||`<div class="empty"><div class="empty-ico">📊</div><p>Nenhum gasto neste mês</p></div>`}`;
+
+ // ── Crédito usado este mês (por grupo) ────────────────────────────
+ const creditItems=mt.filter(t=>t.method==="Crédito"&&(!t.txType||t.txType==="saida"));
+ const creditByGroup={};
+ creditItems.forEach(t=>{const g=getGroup(t.category);const k=g?.id||"outros";if(!creditByGroup[k])creditByGroup[k]={g,items:[]};creditByGroup[k].items.push(t);});
+ const creditTotal=creditItems.reduce((a,b)=>a+b.amount,0);
+ const creditRows=Object.values(creditByGroup).map(({g,items})=>{
+  if(!g)return"";
+  const spent=items.reduce((a,b)=>a+b.amount,0);
+  const bySub={};items.forEach(t=>{const s=(t.category||"").split(" > ")[1]||"?";bySub[s]=(bySub[s]||0)+t.amount;});
+  const subRows=Object.entries(bySub).sort((a,b)=>b[1]-a[1]).map(([s,v])=>`<div class="row" style="padding:4px 0;border-bottom:1px solid var(--faint)"><span style="font-size:12px;color:var(--muted)">↳ ${escH(s)}</span><span style="font-size:12px;font-weight:700">${fmtBRL(v)}</span></div>`).join("");
+  return`<div style="background:var(--faint);border-radius:10px;margin-bottom:6px;overflow:hidden"><div style="padding:9px 12px;border-left:3px solid ${g.c}"><div class="row"><span style="font-weight:700;font-size:13px;color:${g.c}">${g.l}</span><span style="font-weight:800;font-size:14px">${fmtBRL(spent)}</span></div></div><div style="padding:6px 12px 10px">${subRows}</div></div>`;
+ }).join("");
+
+ // ── Parcelas de meses anteriores competindo este mês ──────────────
+ // Installments where the charge is from a previous month but the installment falls here
+ const allTx=S.transactions;
+ const parcRows=[];
+ // Find all installment transactions dated this month (current=N of total)
+ const instThisMonth=allTx.filter(t=>{
+  if(!t.installments||!t.date)return false;
+  const d=new Date(t.date+"T00:00:00");
+  return d.getMonth()===S.filterMonth&&d.getFullYear()===S.filterYear;
+ });
+ // Group by original purchase (same desc + total)
+ const parcByGroup={};
+ instThisMonth.forEach(t=>{
+  const g=getGroup(t.category);const gk=g?.id||"outros";
+  if(!parcByGroup[gk])parcByGroup[gk]={g,items:[]};
+  parcByGroup[gk].items.push(t);
+ });
+ const parcTotal=instThisMonth.reduce((a,b)=>a+b.amount,0);
+ const parcRows2=Object.values(parcByGroup).map(({g,items})=>{
+  if(!g)return"";
+  const v=items.reduce((a,b)=>a+b.amount,0);
+  const itemRows=items.map(t=>`<div class="row" style="padding:4px 0;border-bottom:1px solid var(--faint)">
+   <div><span style="font-size:12px">${escH(t.desc)}</span><span style="font-size:10px;color:var(--muted);margin-left:6px">${t.installments.current}/${t.installments.total}x · ${fmtBRL(t.installments.totalValue)} total</span></div>
+   <span style="font-size:12px;font-weight:700">${fmtBRL(t.amount)}</span>
+  </div>`).join("");
+  return`<div style="background:var(--faint);border-radius:10px;margin-bottom:6px;overflow:hidden"><div style="padding:9px 12px;border-left:3px solid ${g?.c||"var(--muted)"}"><div class="row"><span style="font-weight:700;font-size:13px;color:${g?.c||"var(--muted)"}">${g?.l||"📦 Outros"}</span><span style="font-weight:800;font-size:14px">${fmtBRL(v)}</span></div></div><div style="padding:6px 12px 10px">${itemRows}</div></div>`;
+ }).join("");
+
+ const hasCredit=creditTotal>0;
+ const hasParc=parcTotal>0;
+ const hasRows=rows.length>0;
+
+ return`<div class="row" style="margin-bottom:12px">
+  <div class="sec" style="margin:0">Grupos — ${MONTHS_S[S.filterMonth]}/${S.filterYear}</div>
+  <button onclick="openModal('metas')" style="background:none;border:1px solid var(--mintbd);border-radius:8px;color:var(--mint);font-size:11px;padding:5px 10px;cursor:pointer;font-family:'Nunito',sans-serif;font-weight:700">🎯 Metas</button>
+ </div>
+
+ ${hasRows?`<div class="sec" style="margin-top:0">💰 Gastos diretos (débito/PIX/dinheiro)</div>${rows}`:""}
+
+ ${hasCredit?`<div class="sec">💳 Compras no cartão este mês</div>
+  <div style="background:var(--bg3);border-radius:var(--r2);border:1px solid var(--border);padding:12px;margin-bottom:10px">
+   <div class="row" style="margin-bottom:10px"><span style="font-size:13px;font-weight:700">Total no cartão</span><span style="font-size:17px;font-weight:900;color:var(--red)">${fmtBRL(creditTotal)}</span></div>
+   <div style="font-size:11px;color:var(--muted);margin-bottom:8px">⚠️ Estes valores serão cobrados na fatura do próximo ciclo</div>
+   ${creditRows}
+  </div>`:""}
+
+ ${hasParc?`<div class="sec">📦 Parcelas de compras anteriores</div>
+  <div style="background:var(--bg3);border-radius:var(--r2);border:1px solid var(--border);padding:12px;margin-bottom:10px">
+   <div class="row" style="margin-bottom:10px"><span style="font-size:13px;font-weight:700">Total de parcelas</span><span style="font-size:17px;font-weight:900;color:var(--orange)">${fmtBRL(parcTotal)}</span></div>
+   ${parcRows2}
+  </div>`:""}
+
+ ${!hasRows&&!hasCredit&&!hasParc?`<div class="empty"><div class="empty-ico">📊</div><p>Nenhum gasto em ${MONTHS_F[S.filterMonth]}</p></div>`:""}`;
 }
 
 // ── RENDER LIST ──────────────────────────────────────────────
@@ -695,13 +808,20 @@ function renderFixed(){
   const skip=S.fixedSkips?.[fa.id]?.[mk];
   const pending=!log&&!skip;
   const ow=OWNERS.find(x=>x.id===fa.resp);
-  return`<div class="card-sm row" style="cursor:pointer;border-left:3px solid ${pending?"var(--gold)":"var(--mint)"}" onclick="openModal('fixedLog','${fa.id}')">
-   <div style="flex:1"><div style="display:flex;gap:6px;align-items:center;margin-bottom:3px"><span style="font-size:13px;font-weight:700">${escH(fa.desc)}</span>${fa.variable?`<span class="badge b-blue">Variável</span>`:""}</div>
-    <div style="font-size:11px;color:var(--muted)">Vence dia ${fa.venc} · ${ow?.e||""} ${ow?.l||""}</div>
-   </div>
-   <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-    <span style="font-size:15px;font-weight:800">${skip?"—":log?fmtBRL(log):fa.valor?fmtBRL(fa.valor):"—"}</span>
-    <span class="badge ${skip?"b-muted":log?"b-mint":"b-gold"}">${skip?"⊘ Ignorada neste mês":log?"✓ Lançado":"⚠️ Pendente"}</span>
+  const isPaid=S.fixedPaid?.[fa.id]?.[mk]||false;
+  return`<div class="card-sm" style="border-left:3px solid ${pending?"var(--gold)":isPaid?"var(--mint)":"var(--border)"}">
+   <div class="row" style="gap:10px">
+    <div style="flex:1;cursor:pointer" onclick="openModal('fixedLog','${fa.id}')">
+     <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px"><span style="font-size:13px;font-weight:700">${escH(fa.desc)}</span>${fa.variable?`<span class="badge b-blue">Variável</span>`:""}</div>
+     <div style="font-size:11px;color:var(--muted)">Vence dia ${fa.venc} · ${ow?.e||""} ${ow?.l||""}</div>
+    </div>
+    <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+     <span style="font-size:15px;font-weight:800">${skip?"—":log?fmtBRL(log):fa.valor?fmtBRL(fa.valor):"—"}</span>
+     ${log&&!skip?`<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:${isPaid?"var(--mint)":"var(--muted)"}">
+      <input type="checkbox" ${isPaid?"checked":""} onchange="toggleFixaPaid('${fa.id}','${mk}',this.checked)" style="accent-color:var(--mint);width:14px;height:14px">
+      ${isPaid?"✅ Pago":"Marcar pago"}
+     </label>`:`<span class="badge ${skip?"b-muted":"b-gold"}">${skip?"⊘ Ignorada":"⚠️ Pendente"}</span>`}
+    </div>
    </div>
   </div>`;}).join("");
  return`<div class="row" style="margin-bottom:12px"><div class="sec" style="margin:0">📌 Fixas — ${MONTHS_F[S.filterMonth]} ${S.filterYear}</div><button onclick="nav('cad_fixas')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:11px;padding:5px 10px;cursor:pointer;font-family:'Nunito',sans-serif">⚙️ Editar cadastro</button></div>${rows}<p style="font-size:11px;color:var(--muted);margin-top:8px">Toque para registrar o valor ou ignorar no mês.</p>`;
